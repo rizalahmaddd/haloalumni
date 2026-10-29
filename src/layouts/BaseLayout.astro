@@ -1,0 +1,122 @@
+---
+import '../styles/global.css';
+import type { Settings } from '../server/settings';
+import { mediaUrl } from '../server/storage/r2';
+
+type JsonLd = Record<string, unknown>;
+
+interface Props {
+  settings: Settings;
+  title?: string;
+  description?: string;
+  noindex?: boolean;
+  image?: string | null;
+  type?: 'website' | 'article' | 'profile' | 'event';
+  jsonLd?: JsonLd | JsonLd[];
+  bodyClass?: string;
+}
+
+const {
+  settings,
+  title,
+  description,
+  noindex = false,
+  image,
+  type = 'website',
+  jsonLd,
+  bodyClass,
+} = Astro.props;
+const siteName = settings['site.name'];
+const pageTitle = title ? `${title} · ${siteName}` : siteName;
+const metaDescription = description ?? settings['site.tagline'];
+const accent = settings['site.accent'] || '#0071e3';
+const origin = new URL(Astro.site ?? Astro.url);
+const canonical = new URL(Astro.url.pathname, origin);
+const resolvedImage = image ? mediaUrl(image) : null;
+const ogImage = new URL(resolvedImage ?? '/og-default.svg', origin);
+const logoUrl = mediaUrl(settings['site.logo_key']);
+
+const jsonLdBlocks: JsonLd[] = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: siteName,
+    url: origin.origin,
+    ...(logoUrl ? { logo: new URL(logoUrl, origin).href } : {}),
+  },
+  ...(jsonLd ? (Array.isArray(jsonLd) ? jsonLd : [jsonLd]) : []),
+];
+---
+
+<!doctype html>
+<html lang="id" style={`--accent:${accent};`}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <title>{pageTitle}</title>
+    <meta name="description" content={metaDescription} />
+    {noindex && <meta name="robots" content="noindex,nofollow" />}
+    <link rel="canonical" href={canonical.href} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content={siteName} />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta property="og:type" content={type} />
+    <meta property="og:locale" content="id_ID" />
+    <meta property="og:site_name" content={siteName} />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={metaDescription} />
+    <meta property="og:url" content={canonical.href} />
+    <meta property="og:image" content={ogImage.href} />
+    <meta property="og:image:alt" content={pageTitle} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={pageTitle} />
+    <meta name="twitter:description" content={metaDescription} />
+    <meta name="twitter:image" content={ogImage.href} />
+    {jsonLdBlocks.map((block) => (
+      <script
+        type="application/ld+json"
+        set:html={JSON.stringify(block).replace(/</g, '\\u003c')}
+      />
+    ))}
+    <script is:inline>
+      (function () {
+        try {
+          var theme = localStorage.getItem('alumni.theme');
+          if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+          var tint = Number(localStorage.getItem('alumni.glass'));
+          if (tint >= 0.4 && tint <= 1) document.documentElement.style.setProperty('--glass-tint', String(tint));
+          if (localStorage.getItem('alumni.reducedTransparency') === 'true')
+            document.documentElement.dataset.reducedTransparency = 'true';
+          if (window.matchMedia('(prefers-reduced-transparency: reduce)').matches)
+            document.documentElement.dataset.reducedTransparency = 'true';
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body class={bodyClass}>
+    <a class="skip-link" href="#konten">Lewati ke konten</a>
+    <slot />
+    <script is:inline>
+      (function () {
+        var root = document.documentElement;
+        var update = function () {
+          root.toggleAttribute('data-scrolled', window.scrollY > 4);
+        };
+        update();
+        window.addEventListener('scroll', update, { passive: true });
+        if ('serviceWorker' in navigator) {
+          window.addEventListener('load', function () {
+            navigator.serviceWorker.register('/sw.js').catch(function () {});
+          });
+        }
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,57 @@
+---
+import { actions } from 'astro:actions';
+import { ArrowRight, Mail } from '@lucide/astro';
+import AuthLayout from '../layouts/AuthLayout.astro';
+import Turnstile from '../components/ui/Turnstile.astro';
+import { getSettings } from '../server/settings';
+
+const settings = await getSettings();
+const error = Astro.url.searchParams.get('error');
+const sukses = Astro.url.searchParams.get('sukses');
+const next = Astro.url.searchParams.get('next') ?? '';
+---
+
+<AuthLayout
+  settings={settings}
+  title="Masuk"
+  heading="Masuk ke akun alumni"
+  subheading="Kami akan mengirim tautan masuk ke email Anda. Tidak perlu kata sandi."
+>
+  {error && <div class="alert alert-error" role="alert" style="margin-bottom:1rem">{error}</div>}
+  {sukses && <div class="alert alert-success" role="status" style="margin-bottom:1rem">{sukses}</div>}
+
+  <form method="POST" action={actions.auth.requestLink} class="stack" style="gap:0.85rem">
+    {next && <input type="hidden" name="next" value={next} />}
+    <div class="field">
+      <label class="label" for="email">Alamat email</label>
+      <input
+        class="input"
+        id="email"
+        name="email"
+        type="email"
+        autocomplete="email"
+        required
+        placeholder="nama@email.com"
+      />
+    </div>
+
+    <Turnstile />
+
+    <button class="btn btn-primary btn-lg btn-block" type="submit">
+      <Mail size={17} stroke-width={1.9} />
+      Kirim tautan masuk
+    </button>
+  </form>
+
+  <div class="divider" style="margin:1.35rem 0"></div>
+
+  <p class="muted" style="font-size:0.88rem;margin:0">
+    Belum terdaftar?{' '}
+    <a href="/daftar" style="color:var(--accent);font-weight:600">Daftar sebagai alumni</a>
+    <ArrowRight size={13} stroke-width={2} style="display:inline;vertical-align:-2px" />
+  </p>
+
+  <p class="tertiary" style="font-size:0.8rem;margin-top:0.75rem">
+    Tautan berlaku 20 menit dan hanya bisa dipakai sekali. Periksa folder spam jika tidak menemukan email.
+  </p>
+</AuthLayout>

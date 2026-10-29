@@ -1,0 +1,286 @@
+---
+import { actions } from 'astro:actions';
+import { desc, eq } from 'drizzle-orm';
+import { ArrowLeft, Check, Download, FileImage, Save, Trash2, X } from '@lucide/astro';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import MarkdownEditor from '../../../components/admin/MarkdownEditor';
+import MediaPicker from '../../../components/admin/MediaPicker';
+import Badge from '../../../components/ui/Badge.astro';
+import { donationCampaigns, donations, getDb } from '../../../server/db';
+import { getSettings } from '../../../server/settings';
+import { formatDate, toDateTimeLocal } from '../../../server/format';
+import { formatRupiah } from '../../../server/util';
+
+const { id } = Astro.params;
+const settings = await getSettings();
+const db = getDb();
+
+const [campaign] = await db
+  .select()
+  .from(donationCampaigns)
+  .where(eq(donationCampaigns.id, id ?? ''))
+  .limit(1);
+
+const canManage = Astro.locals.user?.role === 'admin';
+const isDonation = !campaign && id !== 'baru' && id !== undefined;
+
+const [donation] = isDonation
+  ? await db
+      .select({
+        id: donations.id,
+        campaignId: donations.campaignId,
+        campaignTitle: donationCampaigns.title,
+        campaignSlug: donationCampaigns.slug,
+        donorName: donations.donorName,
+        donorEmail: donations.donorEmail,
+        amount: donations.amount,
+        transferDate: donations.transferDate,
+        proofKey: donations.proofKey,
+        message: donations.message,
+        isAnonymous: donations.isAnonymous,
+        status: donations.status,
+        createdAt: donations.createdAt,
+      })
+      .from(donations)
+      .innerJoin(donationCampaigns, eq(donations.campaignId, donationCampaigns.id))
+      .where(eq(donations.id, id ?? ''))
+      .limit(1)
+  : [null];
+
+if (isDonation && !donation) Astro.response.status = 404;
+const isNew = id === 'baru';
+if (!isNew && !campaign && !donation) Astro.response.status = 404;
+
+const campaignDonations = campaign
+  ? await db
+      .select()
+      .from(donations)
+      .where(eq(donations.campaignId, campaign.id))
+      .orderBy(desc(donations.createdAt))
+  : [];
+
+const error = Astro.url.searchParams.get('error');
+const sukses = Astro.url.searchParams.get('sukses');
+---
+
+<AdminLayout settings={settings} title={isDonation ? 'Verifikasi donasi' : isNew ? 'Tambah kampanye' : 'Edit kampanye'}>
+  <a
+    class="btn btn-ghost btn-sm"
+    href={isDonation ? `/admin/donasi/${donation?.campaignId}` : '/admin/donasi'}
+    style="margin-bottom:1rem"
+  >
+    <ArrowLeft size={15} stroke-width={2} /> Donasi
+  </a>
+
+  {error && <div class="alert alert-error" role="alert" style="margin-bottom:1rem">{error}</div>}
+  {sukses && <div class="alert alert-success" role="status" style="margin-bottom:1rem">{sukses}</div>}
+
+  {
+    isDonation && donation ? (
+      <div class="grid-2" style="grid-template-columns:minmax(0,1fr) 360px;align-items:start">
+        <section class="solid-panel" style="padding:1.35rem">
+          <div class="spread">
+            <h1 class="section-title" style="font-size:1.25rem">{donation.donorName}</h1>
+            <Badge variant={donation.status === 'verified' ? 'success' : donation.status === 'pending' ? 'warning' : 'danger'}>
+              {donation.status}
+            </Badge>
+          </div>
+          <p class="muted" style="font-size:0.85rem;margin:0.3rem 0 0">
+            {donation.campaignTitle} · {formatDate(donation.createdAt)}
+          </p>
+
+          <div class="stack" style="gap:0.6rem;margin-top:1.1rem;font-size:0.9rem">
+            <div class="spread">
+              <span class="tertiary">Nominal</span>
+              <strong>{formatRupiah(donation.amount)}</strong>
+            </div>
+            <div class="spread">
+              <span class="tertiary">Email</span>
+              {donation.donorEmail ? (
+                <a href={`mailto:${donation.donorEmail}`} style="color:var(--accent)">{donation.donorEmail}</a>
+              ) : (
+                <span>—</span>
+              )}
+            </div>
+            <div class="spread">
+              <span class="tertiary">Tanggal transfer</span>
+              <span>{donation.transferDate ?? '—'}</span>
+            </div>
+            <div class="spread">
+              <span class="tertiary">Anonim</span>
+              <span>{donation.isAnonymous ? 'Ya' : 'Tidak'}</span>
+            </div>
+          </div>
+
+          {donation.message && (
+            <p class="muted" style="margin:1rem 0 0;font-size:0.88rem;padding:0.75rem;background:var(--surface-raised);border-radius:10px">
+              “{donation.message}”
+            </p>
+          )}
+
+          <div class="row wrap" style="gap:0.5rem;margin-top:1.25rem">
+            {donation.proofKey ? (
+              <a class="btn btn-secondary btn-sm" href={`/api/admin/bukti/${donation.id}`} target="_blank" rel="noopener">
+                <FileImage size={15} stroke-width={1.9} /> Lihat bukti transfer
+              </a>
+            ) : (
+              <span class="tertiary" style="font-size:0.82rem">Tidak ada bukti transfer diunggah.</span>
+            )}
+          </div>
+
+          {donation.status === 'pending' && (
+            <div class="row" style="gap:0.5rem;margin-top:1rem">
+              <form method="POST" action={actions.admin.verifyDonation}>
+                <input type="hidden" name="id" value={donation.id} />
+                <input type="hidden" name="action" value="verify" />
+                <button class="btn btn-primary" type="submit">
+                  <Check size={16} stroke-width={2} /> Verifikasi
+                </button>
+              </form>
+              <form method="POST" action={actions.admin.verifyDonation}>
+                <input type="hidden" name="id" value={donation.id} />
+                <input type="hidden" name="action" value="reject" />
+                <button class="btn btn-danger" type="submit">
+                  <X size={16} stroke-width={2} /> Tolak
+                </button>
+              </form>
+            </div>
+          )}
+        </section>
+
+        <aside class="solid-panel" style="padding:1.25rem">
+          <h2 class="section-title" style="font-size:1rem">Kampanye</h2>
+          <p class="muted" style="font-size:0.86rem;margin:0.4rem 0 0">{donation.campaignTitle}</p>
+          <a class="btn btn-secondary btn-sm" href={`/donasi/${donation.campaignSlug}`} target="_blank" rel="noopener" style="margin-top:0.8rem">
+            Lihat halaman publik
+          </a>
+        </aside>
+      </div>
+    ) : (
+      <>
+        <div class="spread wrap" style="margin-bottom:1.25rem">
+          <div>
+            <h1 class="section-title">{isNew ? 'Tambah kampanye' : campaign?.title}</h1>
+            {campaign && (
+              <p class="muted" style="margin:0.3rem 0 0;font-size:0.84rem">
+                <Badge variant={campaign.status === 'active' ? 'success' : 'default'}>{campaign.status}</Badge>
+              </p>
+            )}
+          </div>
+          {campaign && (
+            <a class="btn btn-secondary btn-sm" href={`/api/admin/export/donasi`}>
+              <Download size={15} stroke-width={1.9} /> Export donasi
+            </a>
+          )}
+        </div>
+
+        <form method="POST" action={actions.admin.saveCampaign} class="stack" style="gap:1.25rem">
+          {campaign && <input type="hidden" name="id" value={campaign.id} />}
+
+          <section class="solid-panel" style="padding:1.35rem">
+            <div class="grid-2" style="gap:0.75rem">
+              <div class="field" style="grid-column:1 / -1">
+                <label class="label" for="title">Judul kampanye</label>
+                <input class="input" id="title" name="title" required value={campaign?.title ?? ''} />
+              </div>
+              <div class="field">
+                <label class="label" for="slug">Slug</label>
+                <input class="input" id="slug" name="slug" value={campaign?.slug ?? ''} placeholder="otomatis" />
+              </div>
+              <div class="field">
+                <label class="label" for="status">Status</label>
+                <select class="select" id="status" name="status">
+                  <option value="draft" selected={campaign?.status === 'draft'}>Draft</option>
+                  <option value="active" selected={campaign?.status === 'active'}>Aktif</option>
+                  <option value="closed" selected={campaign?.status === 'closed'}>Selesai</option>
+                </select>
+              </div>
+              <div class="field">
+                <label class="label" for="targetAmount">Target (Rp)</label>
+                <input class="input" id="targetAmount" name="targetAmount" inputmode="numeric" value={campaign?.targetAmount ?? ''} />
+              </div>
+              <div class="field">
+                <label class="label" for="deadline">Batas waktu</label>
+                <input class="input" id="deadline" name="deadline" type="datetime-local" value={toDateTimeLocal(campaign?.deadline)} />
+              </div>
+              <div class="field" style="grid-column:1 / -1">
+                <label class="label" for="bankInfo">Informasi rekening</label>
+                <textarea class="textarea" id="bankInfo" name="bankInfo" rows="3">{campaign?.bankInfo ?? ''}</textarea>
+              </div>
+            </div>
+            <div style="margin-top:0.9rem">
+              <MediaPicker name="coverKey" label="Gambar sampul" initialKey={campaign?.coverKey ?? ''} folder="campaigns" client:idle />
+            </div>
+          </section>
+
+          <section class="solid-panel" style="padding:1.35rem">
+            <h2 class="section-title" style="font-size:1rem">Deskripsi</h2>
+            <div style="margin-top:0.9rem">
+              <MarkdownEditor name="descriptionMd" initialValue={campaign?.descriptionMd ?? ''} client:idle />
+            </div>
+          </section>
+
+          <div class="row wrap">
+            <button class="btn btn-primary" type="submit">
+              <Save size={16} stroke-width={1.9} /> Simpan kampanye
+            </button>
+            {campaign && canManage && (
+              <button
+                class="btn btn-danger"
+                type="submit"
+                formaction={actions.admin.deleteCampaign}
+                formnovalidate
+                onclick="return confirm('Hapus kampanye ini?')"
+              >
+                <Trash2 size={16} stroke-width={1.8} /> Hapus
+              </button>
+            )}
+          </div>
+        </form>
+
+        {campaign && (
+          <section class="stack" style="gap:0.75rem;margin-top:2rem">
+            <h2 class="section-title" style="font-size:1.05rem">Donasi ({campaignDonations.length})</h2>
+            {campaignDonations.length > 0 ? (
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Donatur</th>
+                      <th scope="col">Nominal</th>
+                      <th scope="col">Status</th>
+                      <th scope="col">Waktu</th>
+                      <th scope="col" style="text-align:right">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {campaignDonations.map((row) => (
+                      <tr>
+                        <td>
+                          <div style="font-weight:600">{row.donorName}</div>
+                          {row.isAnonymous && <span class="tertiary" style="font-size:0.72rem">Anonim</span>}
+                        </td>
+                        <td style="font-size:0.82rem">{formatRupiah(row.amount)}</td>
+                        <td>
+                          <Badge variant={row.status === 'verified' ? 'success' : row.status === 'pending' ? 'warning' : 'danger'}>
+                            {row.status}
+                          </Badge>
+                        </td>
+                        <td class="tertiary" style="font-size:0.76rem">{formatDate(row.createdAt)}</td>
+                        <td style="text-align:right">
+                          <a class="btn btn-secondary btn-sm" href={`/admin/donasi/${row.id}`}>Detail</a>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p class="muted" style="font-size:0.86rem">Belum ada donasi untuk kampanye ini.</p>
+            )}
+          </section>
+        )}
+      </>
+    )
+  }
+</AdminLayout>

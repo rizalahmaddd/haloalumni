@@ -1,0 +1,159 @@
+---
+import { actions } from 'astro:actions';
+import { Save, ShieldAlert } from '@lucide/astro';
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import MediaPicker from '../../components/admin/MediaPicker';
+import { getSettings } from '../../server/settings';
+
+const settings = await getSettings();
+const user = Astro.locals.user!;
+const isAdmin = user.role === 'admin';
+const sukses = Astro.url.searchParams.get('sukses');
+const error = Astro.url.searchParams.get('error');
+---
+
+<AdminLayout settings={settings} title="Pengaturan">
+  <div style="margin-bottom:1.25rem">
+    <h1 class="section-title">Pengaturan situs</h1>
+    <p class="muted" style="margin:0.3rem 0 0;font-size:0.88rem">
+      Identitas institusi, label data alumni, branding, dan kontak.
+    </p>
+  </div>
+
+  {error && <div class="alert alert-error" role="alert" style="margin-bottom:1rem">{error}</div>}
+  {sukses && <div class="alert alert-success" role="status" style="margin-bottom:1rem">{sukses}</div>}
+
+  {
+    !isAdmin ? (
+      <div class="alert alert-info" role="status" style="display:flex;gap:0.5rem;align-items:flex-start">
+        <ShieldAlert size={17} stroke-width={2} style="flex:none;margin-top:2px" />
+        <span>Hanya admin yang dapat mengubah pengaturan situs.</span>
+      </div>
+    ) : (
+      <form method="POST" action={actions.admin.updateSettings} class="stack" style="gap:1.25rem">
+        <section class="solid-panel" style="padding:1.35rem">
+          <h2 class="section-title" style="font-size:1rem">Identitas</h2>
+          <div class="grid-2" style="gap:0.75rem;margin-top:0.9rem">
+            <div class="field">
+              <label class="label" for="site.name">Nama situs / institusi</label>
+              <input class="input" id="site.name" name="site.name" required value={settings['site.name']} />
+            </div>
+            <div class="field">
+              <label class="label" for="site.tagline">Tagline</label>
+              <input class="input" id="site.tagline" name="site.tagline" value={settings['site.tagline']} />
+            </div>
+            <div class="field">
+              <label class="label" for="site.institution_type">Jenis institusi</label>
+              <input class="input" id="site.institution_type" name="site.institution_type" value={settings['site.institution_type']} />
+            </div>
+            <div class="field">
+              <label class="label" for="site.accent">Warna aksen</label>
+              <input class="input" id="site.accent" name="site.accent" type="color" value={settings['site.accent']} style="height:46px;padding:0.3rem" />
+            </div>
+            <div class="field">
+              <label class="label" for="site.year_label">Label angkatan</label>
+              <input class="input" id="site.year_label" name="site.year_label" value={settings['site.year_label']} />
+            </div>
+            <div class="field">
+              <label class="label" for="site.program_label">Label program/jurusan</label>
+              <input class="input" id="site.program_label" name="site.program_label" value={settings['site.program_label']} />
+            </div>
+            <div class="field">
+              <label class="label" for="site.nim_label">Label NIS/NIM</label>
+              <input class="input" id="site.nim_label" name="site.nim_label" value={settings['site.nim_label']} />
+            </div>
+            <div class="field">
+              <label class="label" for="jobs.duration_days">Masa aktif loker (hari)</label>
+              <input class="input" id="jobs.duration_days" name="jobs.duration_days" inputmode="numeric" value={settings['jobs.duration_days']} />
+            </div>
+          </div>
+          <div style="margin-top:0.9rem">
+            <MediaPicker name="site.logo_key" label="Logo institusi" initialKey={settings['site.logo_key']} folder="branding" client:idle />
+          </div>
+        </section>
+
+        <section class="solid-panel" style="padding:1.35rem">
+          <h2 class="section-title" style="font-size:1rem">Beranda</h2>
+          <div class="stack" style="gap:0.75rem;margin-top:0.9rem">
+            <div class="field">
+              <label class="label" for="site.hero_title">Judul hero</label>
+              <input class="input" id="site.hero_title" name="site.hero_title" value={settings['site.hero_title']} />
+            </div>
+            <div class="field">
+              <label class="label" for="site.hero_subtitle">Subjudul hero</label>
+              <textarea class="textarea" id="site.hero_subtitle" name="site.hero_subtitle" rows="3">{settings['site.hero_subtitle']}</textarea>
+            </div>
+            <div class="field">
+              <label class="label" for="site.footer_note">Catatan footer</label>
+              <input class="input" id="site.footer_note" name="site.footer_note" value={settings['site.footer_note']} />
+            </div>
+          </div>
+        </section>
+
+        <section class="solid-panel" style="padding:1.35rem">
+          <h2 class="section-title" style="font-size:1rem">Mode perawatan</h2>
+          <p class="muted" style="margin:0.3rem 0 0;font-size:0.84rem">
+            Saat aktif, pengunjung melihat halaman perawatan. Editor dan admin tetap dapat mengakses CMS.
+          </p>
+          <div class="grid-2" style="gap:0.75rem;margin-top:0.9rem">
+            <div class="field">
+              <label class="label" for="site.maintenance">Status</label>
+              <select class="select" id="site.maintenance" name="site.maintenance">
+                <option value="false" selected={settings['site.maintenance'] !== 'true'}>Situs normal</option>
+                <option value="true" selected={settings['site.maintenance'] === 'true'}>Mode perawatan</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="label" for="site.maintenance_message">Pesan perawatan</label>
+              <input class="input" id="site.maintenance_message" name="site.maintenance_message" value={settings['site.maintenance_message']} />
+            </div>
+          </div>
+        </section>
+
+        <section class="solid-panel" style="padding:1.35rem">
+          <h2 class="section-title" style="font-size:1rem">Kontak & sosial</h2>
+          <div class="grid-2" style="gap:0.75rem;margin-top:0.9rem">
+            <div class="field">
+              <label class="label" for="site.email">Email sekretariat</label>
+              <input class="input" id="site.email" name="site.email" type="email" value={settings['site.email']} />
+            </div>
+            <div class="field">
+              <label class="label" for="site.phone">Telepon</label>
+              <input class="input" id="site.phone" name="site.phone" value={settings['site.phone']} />
+            </div>
+            <div class="field">
+              <label class="label" for="site.whatsapp">WhatsApp</label>
+              <input class="input" id="site.whatsapp" name="site.whatsapp" value={settings['site.whatsapp']} />
+            </div>
+            <div class="field">
+              <label class="label" for="site.address">Alamat</label>
+              <input class="input" id="site.address" name="site.address" value={settings['site.address']} />
+            </div>
+            <div class="field">
+              <label class="label" for="site.instagram">Instagram URL</label>
+              <input class="input" id="site.instagram" name="site.instagram" value={settings['site.instagram']} />
+            </div>
+            <div class="field">
+              <label class="label" for="site.linkedin">LinkedIn URL</label>
+              <input class="input" id="site.linkedin" name="site.linkedin" value={settings['site.linkedin']} />
+            </div>
+            <div class="field">
+              <label class="label" for="site.facebook">Facebook URL</label>
+              <input class="input" id="site.facebook" name="site.facebook" value={settings['site.facebook']} />
+            </div>
+            <div class="field">
+              <label class="label" for="site.youtube">YouTube URL</label>
+              <input class="input" id="site.youtube" name="site.youtube" value={settings['site.youtube']} />
+            </div>
+          </div>
+        </section>
+
+        <div class="row">
+          <button class="btn btn-primary" type="submit">
+            <Save size={16} stroke-width={1.9} /> Simpan pengaturan
+          </button>
+        </div>
+      </form>
+    )
+  }
+</AdminLayout>

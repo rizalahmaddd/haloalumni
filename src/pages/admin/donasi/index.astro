@@ -1,0 +1,139 @@
+---
+import { and, desc, eq, sql } from 'drizzle-orm';
+import { Download, Pencil, Plus } from '@lucide/astro';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import EmptyState from '../../../components/ui/EmptyState.astro';
+import { donationCampaigns, donations, getDb } from '../../../server/db';
+import { getSettings } from '../../../server/settings';
+import { formatRupiah } from '../../../server/util';
+
+const settings = await getSettings();
+const db = getDb();
+
+const [campaigns, pending] = await Promise.all([
+  db
+    .select({
+      id: donationCampaigns.id,
+      slug: donationCampaigns.slug,
+      title: donationCampaigns.title,
+      targetAmount: donationCampaigns.targetAmount,
+      status: donationCampaigns.status,
+      collected: sql<number>`coalesce(sum(case when ${donations.status} = 'verified' then ${donations.amount} else 0 end), 0)`,
+      pendingCount: sql<number>`coalesce(sum(case when ${donations.status} = 'pending' then 1 else 0 end), 0)`,
+    })
+    .from(donationCampaigns)
+    .leftJoin(donations, eq(donations.campaignId, donationCampaigns.id))
+    .groupBy(donationCampaigns.id)
+    .orderBy(desc(donationCampaigns.createdAt)),
+  db
+    .select({
+      id: donations.id,
+      donorName: donations.donorName,
+      amount: donations.amount,
+      campaign: donationCampaigns.title,
+      campaignId: donationCampaigns.id,
+      createdAt: donations.createdAt,
+      hasProof: sql<number>`case when ${donations.proofKey} is null then 0 else 1 end`,
+    })
+    .from(donations)
+    .innerJoin(donationCampaigns, eq(donations.campaignId, donationCampaigns.id))
+    .where(and(eq(donations.status, 'pending')))
+    .orderBy(desc(donations.createdAt)),
+]);
+
+const sukses = Astro.url.searchParams.get('sukses');
+const error = Astro.url.searchParams.get('error');
+---
+
+<AdminLayout settings={settings} title="Donasi">
+  <div class="spread wrap" style="margin-bottom:1.25rem">
+    <div>
+      <h1 class="section-title">Donasi</h1>
+      <p class="muted" style="margin:0.3rem 0 0;font-size:0.88rem">
+        Kelola kampanye dan verifikasi bukti transfer donatur.
+      </p>
+    </div>
+    <div class="row wrap" style="gap:0.4rem">
+      <a class="btn btn-secondary btn-sm" href="/api/admin/export/donasi">
+        <Download size={15} stroke-width={1.9} /> Export CSV
+      </a>
+      <a class="btn btn-primary btn-sm" href="/admin/donasi/baru">
+        <Plus size={15} stroke-width={2} /> Tambah kampanye
+      </a>
+    </div>
+  </div>
+
+  {error && <div class="alert alert-error" role="alert" style="margin-bottom:1rem">{error}</div>}
+  {sukses && <div class="alert alert-success" role="status" style="margin-bottom:1rem">{sukses}</div>}
+
+  {
+    pending.length > 0 && (
+      <section class="solid-panel" style="padding:1.25rem;margin-bottom:1.5rem">
+        <h2 class="section-title" style="font-size:1rem">Menunggu verifikasi ({pending.length})</h2>
+        <div style="margin-top:0.6rem">
+          {pending.map((donation) => (
+            <div class="list-row" style="padding:0.6rem 0">
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:600;font-size:0.88rem">{donation.donorName}</div>
+                <div class="tertiary" style="font-size:0.75rem">{donation.campaign}</div>
+              </div>
+              <span style="font-size:0.86rem;font-weight:650">{formatRupiah(donation.amount)}</span>
+              <a class="btn btn-secondary btn-sm" href={`/admin/donasi/${donation.id}`}>Verifikasi</a>
+            </div>
+          ))}
+        </div>
+      </section>
+    )
+  }
+
+  <h2 class="section-title" style="font-size:1.05rem;margin-bottom:0.75rem">Kampanye</h2>
+  {
+    campaigns.length > 0 ? (
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th scope="col">Kampanye</th>
+              <th scope="col">Target</th>
+              <th scope="col">Terkumpul</th>
+              <th scope="col">Status</th>
+              <th scope="col" style="text-align:right">Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {campaigns.map((campaign) => (
+              <tr>
+                <td>
+                  <div style="font-weight:600">{campaign.title}</div>
+                  <div class="tertiary" style="font-size:0.75rem">
+                    {Number(campaign.pendingCount)} donasi menunggu
+                  </div>
+                </td>
+                <td style="font-size:0.82rem">{formatRupiah(campaign.targetAmount)}</td>
+                <td style="font-size:0.82rem;font-weight:600">{formatRupiah(Number(campaign.collected))}</td>
+                <td>
+                  <Badge variant={campaign.status === 'active' ? 'success' : campaign.status === 'closed' ? 'default' : 'warning'}>
+                    {campaign.status}
+                  </Badge>
+                </td>
+                <td style="text-align:right">
+                  <div class="row" style="justify-content:flex-end;gap:0.3rem">
+                    {campaign.status !== 'draft' && (
+                      <a class="btn btn-ghost btn-sm" href={`/donasi/${campaign.slug}`} target="_blank" rel="noopener">Lihat</a>
+                    )}
+                    <a class="btn btn-secondary btn-sm" href={`/admin/donasi/${campaign.id}`}>
+                      <Pencil size={14} stroke-width={1.9} /> Edit
+                    </a>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    ) : (
+      <EmptyState title="Belum ada kampanye" description="Buat kampanye donasi pertama." />
+    )
+  }
+</AdminLayout>

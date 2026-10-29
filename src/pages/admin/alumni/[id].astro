@@ -1,0 +1,244 @@
+---
+import { actions } from 'astro:actions';
+import { eq } from 'drizzle-orm';
+import { ArrowLeft, Check, ShieldCheck, X } from '@lucide/astro';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Avatar from '../../../components/ui/Avatar.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import { alumniProfiles, getDb, users } from '../../../server/db';
+import { getSettings } from '../../../server/settings';
+import { formatDate } from '../../../server/format';
+
+const { id } = Astro.params;
+const settings = await getSettings();
+const db = getDb();
+
+const [row] = await db
+  .select({
+    userId: users.id,
+    email: users.email,
+    role: users.role,
+    userStatus: users.status,
+    createdAt: users.createdAt,
+    profileId: alumniProfiles.id,
+    fullName: alumniProfiles.fullName,
+    slug: alumniProfiles.slug,
+    angkatan: alumniProfiles.angkatan,
+    program: alumniProfiles.program,
+    nim: alumniProfiles.nim,
+    photoKey: alumniProfiles.photoKey,
+    city: alumniProfiles.city,
+    company: alumniProfiles.company,
+    jobTitle: alumniProfiles.jobTitle,
+    industry: alumniProfiles.industry,
+    bio: alumniProfiles.bio,
+    profileStatus: alumniProfiles.status,
+    directoryVisible: alumniProfiles.directoryVisible,
+    cardNo: alumniProfiles.cardNo,
+    cardToken: alumniProfiles.cardToken,
+    verifiedAt: alumniProfiles.verifiedAt,
+  })
+  .from(users)
+  .leftJoin(alumniProfiles, eq(alumniProfiles.userId, users.id))
+  .where(eq(users.id, id ?? ''))
+  .limit(1);
+
+if (!row) Astro.response.status = 404;
+const error = Astro.url.searchParams.get('error');
+const sukses = Astro.url.searchParams.get('sukses');
+---
+
+<AdminLayout settings={settings} title="Detail alumni">
+  <a class="btn btn-ghost btn-sm" href="/admin/alumni" style="margin-bottom:1rem">
+    <ArrowLeft size={15} stroke-width={2} /> Daftar alumni
+  </a>
+
+  {error && <div class="alert alert-error" role="alert" style="margin-bottom:1rem">{error}</div>}
+  {sukses && <div class="alert alert-success" role="status" style="margin-bottom:1rem">{sukses}</div>}
+
+  {
+    !row ? (
+      <div class="alert alert-error" role="alert">Alumni tidak ditemukan.</div>
+    ) : (
+      <>
+        <div class="glass-panel" style="padding:1.35rem;margin-bottom:1.25rem">
+          <div class="spread wrap" style="gap:1rem;align-items:flex-start">
+            <div class="row" style="gap:0.9rem;align-items:center">
+              <Avatar src={row.photoKey} name={row.fullName ?? row.email} size="lg" />
+              <div>
+                <div class="row wrap" style="gap:0.45rem">
+                  <h1 class="section-title" style="font-size:1.3rem">{row.fullName ?? row.email}</h1>
+                  <Badge
+                    variant={row.userStatus === 'active' ? 'success' : row.userStatus === 'pending' ? 'warning' : 'danger'}
+                  >
+                    {row.userStatus === 'active' ? 'Aktif' : row.userStatus === 'pending' ? 'Menunggu' : 'Ditangguhkan'}
+                  </Badge>
+                  {row.profileStatus === 'published' && <Badge variant="accent">Profil terbit</Badge>}
+                </div>
+                <p class="muted" style="margin:0.25rem 0 0;font-size:0.86rem">
+                  {row.email} · {row.role} · daftar {formatDate(row.createdAt)}
+                </p>
+                <p class="tertiary" style="margin:0.2rem 0 0;font-size:0.8rem">
+                  {settings['site.year_label']} {row.angkatan ?? '—'}
+                  {row.program ? ` · ${row.program}` : ''}
+                  {row.cardNo ? ` · Kartu ${row.cardNo}` : ''}
+                </p>
+              </div>
+            </div>
+
+            <div class="row wrap" style="gap:0.4rem">
+              {
+                row.userStatus === 'pending' && (
+                  <>
+                    <form method="POST" action={actions.admin.moderateAlumni} onsubmit="return confirm('Lakukan aksi moderasi ini?')">
+                      <input type="hidden" name="userId" value={row.userId} />
+                      <input type="hidden" name="action" value="approve" />
+                      <button class="btn btn-primary btn-sm" type="submit">
+                        <Check size={15} stroke-width={2} /> Setujui
+                      </button>
+                    </form>
+                    <form method="POST" action={actions.admin.moderateAlumni}>
+                      <input type="hidden" name="userId" value={row.userId} />
+                      <input type="hidden" name="action" value="reject" />
+                      <button class="btn btn-danger btn-sm" type="submit">
+                        <X size={15} stroke-width={2} /> Tolak
+                      </button>
+                    </form>
+                  </>
+                )
+              }
+              {
+                row.profileStatus === 'published' && (
+                  <form method="POST" action={actions.admin.moderateAlumni}>
+                    <input type="hidden" name="userId" value={row.userId} />
+                    <input type="hidden" name="action" value="hide" />
+                    <button class="btn btn-secondary btn-sm" type="submit">Sembunyikan profil</button>
+                  </form>
+                )
+              }
+              {
+                row.profileStatus === 'hidden' && (
+                  <form method="POST" action={actions.admin.moderateAlumni}>
+                    <input type="hidden" name="userId" value={row.userId} />
+                    <input type="hidden" name="action" value="publish" />
+                    <button class="btn btn-secondary btn-sm" type="submit">Terbitkan profil</button>
+                  </form>
+                )
+              }
+              {row.cardToken && (
+                <a class="btn btn-secondary btn-sm" href={`/verifikasi/${row.cardToken}`} target="_blank" rel="noopener">
+                  <ShieldCheck size={15} stroke-width={1.9} /> Verifikasi
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2" style="align-items:start">
+          <section class="solid-panel" style="padding:1.35rem">
+            <h2 class="section-title" style="font-size:1rem">Edit data alumni</h2>
+            {
+              row.profileId ? (
+                <form method="POST" action={actions.admin.updateAlumni} class="stack" style="gap:0.7rem;margin-top:0.9rem">
+                  <input type="hidden" name="userId" value={row.userId} />
+                  <div class="field">
+                    <label class="label" for="fullName">Nama lengkap</label>
+                    <input class="input" id="fullName" name="fullName" required value={row.fullName ?? ''} />
+                  </div>
+                  <div class="grid-2" style="gap:0.7rem">
+                    <div class="field">
+                      <label class="label" for="angkatan">{settings['site.year_label']}</label>
+                      <input class="input" id="angkatan" name="angkatan" required value={row.angkatan ?? ''} />
+                    </div>
+                    <div class="field">
+                      <label class="label" for="program">{settings['site.program_label']}</label>
+                      <input class="input" id="program" name="program" value={row.program ?? ''} />
+                    </div>
+                    <div class="field">
+                      <label class="label" for="nim">{settings['site.nim_label']}</label>
+                      <input class="input" id="nim" name="nim" value={row.nim ?? ''} />
+                    </div>
+                    <div class="field">
+                      <label class="label" for="city">Kota</label>
+                      <input class="input" id="city" name="city" value={row.city ?? ''} />
+                    </div>
+                    <div class="field">
+                      <label class="label" for="company">Perusahaan</label>
+                      <input class="input" id="company" name="company" value={row.company ?? ''} />
+                    </div>
+                    <div class="field">
+                      <label class="label" for="jobTitle">Jabatan</label>
+                      <input class="input" id="jobTitle" name="jobTitle" value={row.jobTitle ?? ''} />
+                    </div>
+                    <div class="field">
+                      <label class="label" for="industry">Industri</label>
+                      <input class="input" id="industry" name="industry" value={row.industry ?? ''} />
+                    </div>
+                    <div class="field">
+                      <label class="label" for="status">Status profil</label>
+                      <select class="select" id="status" name="status">
+                        <option value="draft" selected={row.profileStatus === 'draft'}>Draft</option>
+                        <option value="published" selected={row.profileStatus === 'published'}>Terbit</option>
+                        <option value="hidden" selected={row.profileStatus === 'hidden'}>Disembunyikan</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="field">
+                    <label class="label" for="bio">Bio</label>
+                    <textarea class="textarea" id="bio" name="bio" rows="4">{row.bio ?? ''}</textarea>
+                  </div>
+                  <label class="checkbox-row">
+                    <input type="checkbox" name="directoryVisible" checked={row.directoryVisible} />
+                    <span>Tampilkan di direktori</span>
+                  </label>
+                  <button class="btn btn-primary" type="submit">Simpan perubahan</button>
+                </form>
+              ) : (
+                <p class="muted" style="font-size:0.88rem">Pengguna ini belum memiliki profil alumni.</p>
+              )
+            }
+          </section>
+
+          <aside class="stack">
+            <div class="solid-panel" style="padding:1.25rem">
+              <h2 class="section-title" style="font-size:1rem">Kartu alumni</h2>
+              {row.cardNo ? (
+                <div class="stack" style="gap:0.5rem;margin-top:0.7rem;font-size:0.85rem">
+                  <div class="spread">
+                    <span class="tertiary">Nomor</span>
+                    <strong class="tabular">{row.cardNo}</strong>
+                  </div>
+                  <div class="spread">
+                    <span class="tertiary">Diverifikasi</span>
+                    <span>{formatDate(row.verifiedAt)}</span>
+                  </div>
+                  <div class="spread">
+                    <span class="tertiary">Token</span>
+                    <span class="tabular" style="font-size:0.75rem">{row.cardToken}</span>
+                  </div>
+                </div>
+              ) : (
+                <p class="muted" style="font-size:0.85rem;margin:0.5rem 0 0">
+                  Kartu diterbitkan otomatis saat pendaftaran disetujui.
+                </p>
+              )}
+            </div>
+
+            <div class="solid-panel" style="padding:1.25rem">
+              <h2 class="section-title" style="font-size:1rem">Tolak pendaftaran</h2>
+              <form method="POST" action={actions.admin.moderateAlumni} class="stack" style="gap:0.6rem;margin-top:0.7rem">
+                <input type="hidden" name="userId" value={row.userId} />
+                <input type="hidden" name="action" value="reject" />
+                <div class="field">
+                  <label class="label" for="note">Catatan untuk alumni</label>
+                  <textarea class="textarea" id="note" name="note" rows="3" maxlength="1200" placeholder="Opsional" />
+                </div>
+                <button class="btn btn-danger btn-sm" type="submit">Kirim penolakan</button>
+              </form>
+            </div>
+          </aside>
+        </div>
+      </>
+    )
+  }
+</AdminLayout>

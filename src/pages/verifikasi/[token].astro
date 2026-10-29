@@ -1,0 +1,103 @@
+---
+import { eq } from 'drizzle-orm';
+import { CircleAlert, CircleCheck, ShieldCheck } from '@lucide/astro';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Avatar from '../../components/ui/Avatar.astro';
+import Logo from '../../components/ui/Logo.astro';
+import { alumniProfiles, getDb, users } from '../../server/db';
+import { getSettings } from '../../server/settings';
+import { formatDate } from '../../server/format';
+import { mediaUrl } from '../../server/storage/r2';
+
+const { token } = Astro.params;
+const settings = await getSettings();
+
+const [profile] = await getDb()
+  .select({
+    fullName: alumniProfiles.fullName,
+    angkatan: alumniProfiles.angkatan,
+    program: alumniProfiles.program,
+    photoKey: alumniProfiles.photoKey,
+    cardNo: alumniProfiles.cardNo,
+    verifiedAt: alumniProfiles.verifiedAt,
+    profileStatus: alumniProfiles.status,
+    userStatus: users.status,
+  })
+  .from(alumniProfiles)
+  .innerJoin(users, eq(alumniProfiles.userId, users.id))
+  .where(eq(alumniProfiles.cardToken, token ?? ''))
+  .limit(1);
+
+const valid = Boolean(profile && profile.profileStatus === 'published' && profile.userStatus === 'active');
+const logoUrl = mediaUrl(settings['site.logo_key']);
+Astro.response.headers.set('Cache-Control', 'private, no-store');
+---
+
+<BaseLayout settings={settings} title="Verifikasi Kartu Alumni" noindex>
+  <div id="konten" style="min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:1.5rem">
+    <div class="glass-thick" style="width:100%;max-width:440px;padding:1.75rem">
+      <a href="/">
+        <Logo name={settings['site.name']} logoUrl={logoUrl} size={28} />
+      </a>
+
+      <div style="margin-top:1.5rem">
+        {
+          valid && profile ? (
+            <>
+              <div class="row" style="gap:0.5rem;color:var(--success)">
+                <CircleCheck size={20} stroke-width={2} />
+                <h1 class="section-title" style="font-size:1.05rem;margin:0">Kartu valid</h1>
+              </div>
+              <p class="muted" style="font-size:0.84rem;margin:0.4rem 0 1.25rem">
+                Kartu ini terdaftar sebagai kartu anggota yang aktif.
+              </p>
+
+              <div class="row" style="gap:0.9rem;align-items:center">
+                <Avatar src={profile.photoKey} name={profile.fullName} size="lg" />
+                <div style="min-width:0">
+                  <div style="font-weight:700;font-size:1.05rem;letter-spacing:-0.015em">{profile.fullName}</div>
+                  <div class="muted" style="font-size:0.86rem">
+                    {settings['site.year_label']} {profile.angkatan}
+                    {profile.program ? ` · ${profile.program}` : ''}
+                  </div>
+                </div>
+              </div>
+
+              <div class="divider" style="margin:1.25rem 0" />
+
+              <div class="spread" style="font-size:0.82rem">
+                <span class="tertiary">Nomor kartu</span>
+                <strong class="tabular">{profile.cardNo ?? '—'}</strong>
+              </div>
+              <div class="spread" style="font-size:0.82rem;margin-top:0.5rem">
+                <span class="tertiary">Status keanggotaan</span>
+                <span class="badge badge-success">Aktif</span>
+              </div>
+              <div class="spread" style="font-size:0.82rem;margin-top:0.5rem">
+                <span class="tertiary">Diverifikasi</span>
+                <span>{formatDate(profile.verifiedAt)}</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div class="row" style="gap:0.5rem;color:var(--danger)">
+                <CircleAlert size={20} stroke-width={2} />
+                <h1 class="section-title" style="font-size:1.05rem;margin:0">Kartu tidak ditemukan</h1>
+              </div>
+              <p class="muted" style="font-size:0.86rem;margin:0.4rem 0 0;line-height:1.6">
+                Kartu ini tidak terdaftar atau keanggotaannya sudah tidak aktif. Hubungi sekretariat jika Anda
+                merasa ini keliru.
+              </p>
+            </>
+          )
+        }
+      </div>
+
+      <div class="divider" style="margin:1.5rem 0 1rem" />
+      <div class="row" style="gap:0.4rem;font-size:0.76rem;color:var(--text-tertiary)">
+        <ShieldCheck size={14} stroke-width={1.9} />
+        Halaman verifikasi hanya menampilkan data keanggotaan minimum.
+      </div>
+    </div>
+  </div>
+</BaseLayout>

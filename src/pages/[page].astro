@@ -1,0 +1,45 @@
+---
+import { and, eq } from 'drizzle-orm';
+import { ArrowLeft } from '@lucide/astro';
+import PublicLayout from '../layouts/PublicLayout.astro';
+import { getDb, pages } from '../server/db';
+import { getSettings } from '../server/settings';
+import { formatDate } from '../server/format';
+
+const { page: slug } = Astro.params;
+const settings = await getSettings();
+const [row] = await getDb()
+  .select()
+  .from(pages)
+  .where(and(eq(pages.slug, slug ?? ''), eq(pages.status, 'published')))
+  .limit(1);
+
+if (!row) Astro.response.status = 404;
+---
+
+<PublicLayout
+  settings={settings}
+  title={row ? row.title : 'Halaman tidak ditemukan'}
+  noindex={!row}
+>
+  {
+    !row ? (
+      <div class="public-container" style="padding:4rem 1rem">
+        <p class="eyebrow">404</p>
+        <h1 class="page-title" style="margin-top:0.4rem">Halaman tidak ditemukan</h1>
+        <a class="btn btn-secondary" href="/" style="margin-top:1rem">
+          <ArrowLeft size={16} /> Beranda
+        </a>
+      </div>
+    ) : (
+      <article class="public-container" style="max-width:760px;padding-top:2.5rem;padding-bottom:3rem">
+        <p class="eyebrow">Informasi</p>
+        <h1 class="page-title" style="margin-top:0.4rem">{row.title}</h1>
+        <p class="tertiary" style="font-size:0.78rem;margin:0.5rem 0 1.75rem">
+          Diperbarui {formatDate(row.updatedAt)}
+        </p>
+        <div class="prose-content" set:html={row.contentHtml} />
+      </article>
+    )
+  }
+</PublicLayout>

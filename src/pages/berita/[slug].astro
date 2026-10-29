@@ -1,0 +1,100 @@
+---
+import { eq } from 'drizzle-orm';
+import { ArrowLeft, CalendarDays } from '@lucide/astro';
+import PublicLayout from '../../layouts/PublicLayout.astro';
+import { getDb, posts } from '../../server/db';
+import { getSettings } from '../../server/settings';
+import { formatDate } from '../../server/format';
+import { mediaUrl } from '../../server/storage/r2';
+
+const { slug } = Astro.params;
+const settings = await getSettings();
+const [post] = await getDb()
+  .select({
+    id: posts.id,
+    slug: posts.slug,
+    title: posts.title,
+    excerpt: posts.excerpt,
+    coverKey: posts.coverKey,
+    category: posts.category,
+    contentHtml: posts.contentHtml,
+    status: posts.status,
+    publishedAt: posts.publishedAt,
+  })
+  .from(posts)
+  .where(eq(posts.slug, slug ?? ''))
+  .limit(1);
+
+const visible = post && post.status === 'published';
+if (!visible) Astro.response.status = 404;
+const cover = mediaUrl(post?.coverKey);
+---
+
+<PublicLayout
+  settings={settings}
+  active="berita"
+  title={post ? post.title : 'Berita tidak ditemukan'}
+  description={post?.excerpt ?? undefined}
+  noindex={!visible}
+  image={post?.coverKey}
+  type="article"
+  jsonLd={visible && post ? {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: post.title,
+    description: post.excerpt ?? undefined,
+    datePublished: new Date(post.publishedAt ?? Date.now()).toISOString(),
+    dateModified: new Date(post.publishedAt ?? Date.now()).toISOString(),
+    mainEntityOfPage: `${Astro.site ?? Astro.url.origin}/berita/${post.slug}`,
+    image: cover ? new URL(cover, Astro.site ?? Astro.url.origin).href : undefined,
+    author: { '@type': 'Organization', name: settings['site.name'] },
+    publisher: { '@type': 'Organization', name: settings['site.name'] },
+  } : undefined}
+>
+  {
+    !post || !visible ? (
+      <div class="public-container" style="padding:4rem 1rem">
+        <p class="eyebrow">404</p>
+        <h1 class="page-title" style="margin-top:0.4rem">Berita tidak ditemukan</h1>
+        <a class="btn btn-secondary" href="/berita" style="margin-top:1rem">
+          <ArrowLeft size={16} /> Semua berita
+        </a>
+      </div>
+    ) : (
+      <article class="public-container" style="max-width:820px;padding-top:1.75rem;padding-bottom:3rem">
+        <a class="btn btn-ghost btn-sm" href="/berita" style="margin-bottom:1rem">
+          <ArrowLeft size={15} stroke-width={2} /> Berita
+        </a>
+
+        <div class="row wrap" style="gap:0.5rem;margin-bottom:0.6rem">
+          {post.category && <span class="badge badge-accent">{post.category}</span>}
+          <span class="meta-item tertiary" style="font-size:0.82rem">
+            <CalendarDays size={14} stroke-width={1.8} /> {formatDate(post.publishedAt)}
+          </span>
+        </div>
+
+        <h1 class="page-title" style="font-size:clamp(2rem,1.6rem + 2.2vw,3.1rem)">{post.title}</h1>
+        {post.excerpt && (
+          <p class="muted" style="margin:0.8rem 0 0;font-size:1.08rem;line-height:1.55">{post.excerpt}</p>
+        )}
+
+        {
+          cover && (
+            <img
+              src={cover}
+              alt=""
+              style="width:100%;border-radius:var(--radius-panel);margin:1.5rem 0;border:1px solid var(--stroke)"
+            />
+          )
+        }
+
+        <div class="prose-content" set:html={post.contentHtml} />
+
+        <hr class="divider" style="margin:2rem 0 1rem" />
+        <p class="tertiary" style="font-size:0.8rem;margin:0">
+          Diterbitkan oleh sekretariat alumni.
+        </p>
+      </article>
+    )
+  }
+</PublicLayout>

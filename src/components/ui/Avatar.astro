@@ -1,0 +1,32 @@
+---
+import { mediaUrl } from '../../server/storage/r2';
+
+interface Props {
+  src?: string | null;
+  name: string;
+  size?: 'sm' | 'md' | 'lg' | 'xl';
+}
+
+const { src, name, size = 'md' } = Astro.props;
+const initials = name
+  .split(/\s+/)
+  .filter(Boolean)
+  .map((word) => word[0])
+  .slice(0, 2)
+  .join('')
+  .toUpperCase();
+
+const className =
+  size === 'lg' ? 'avatar avatar-lg' : size === 'xl' ? 'avatar avatar-xl' : 'avatar';
+const url = mediaUrl(src);
+---
+
+{
+  url ? (
+    <img class={className} src={url} alt={name} loading="lazy" decoding="async" />
+  ) : (
+    <span class={className} aria-hidden="true">
+      {initials || '?'}
+    </span>
+  )
+}

@@ -1,0 +1,66 @@
+.glass {
+  background: var(--surface-glass);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  border: 1px solid var(--border-glass);
+  box-shadow: var(--shadow-glass);
+  border-radius: var(--radius-panel);
+}
+
+.glass-thin {
+  background: color-mix(in srgb, var(--surface-glass) 82%, transparent);
+  backdrop-filter: blur(var(--glass-blur-thin)) saturate(var(--glass-sat));
+  -webkit-backdrop-filter: blur(var(--glass-blur-thin)) saturate(var(--glass-sat));
+  border: 1px solid var(--border-glass);
+  box-shadow: var(--shadow-glass);
+  border-radius: var(--radius-control);
+}
+
+.glass-thick {
+  background: var(--surface-glass);
+  backdrop-filter: blur(var(--glass-blur-thick)) saturate(var(--glass-sat));
+  -webkit-backdrop-filter: blur(var(--glass-blur-thick)) saturate(var(--glass-sat));
+  border: 1px solid var(--border-glass);
+  box-shadow: var(--shadow-pop);
+  border-radius: var(--radius-window);
+}
+
+.glass-panel {
+  background: color-mix(in srgb, var(--surface-solid) 55%, transparent);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  border: 1px solid var(--border-glass);
+  box-shadow: var(--shadow-glass);
+  border-radius: var(--radius-panel);
+}
+
+.solid-panel {
+  background: var(--surface-solid);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-raised);
+}
+
+.specular {
+  position: relative;
+  overflow: hidden;
+}
+
+.specular::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.28), transparent 42%);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .glass,
+  .glass-thin,
+  .glass-thick,
+  .glass-panel {
+    background: var(--surface-solid);
+  }
+}

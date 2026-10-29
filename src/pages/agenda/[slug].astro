@@ -1,0 +1,254 @@
+---
+import { actions } from 'astro:actions';
+import { and, count, eq, inArray } from 'drizzle-orm';
+import {
+  ArrowLeft,
+  CalendarDays,
+  CircleCheck,
+  Clock,
+  MapPin,
+  Ticket,
+  UserRound,
+  Users,
+} from '@lucide/astro';
+import PublicLayout from '../../layouts/PublicLayout.astro';
+import Badge from '../../components/ui/Badge.astro';
+import { eventRegistrations, events, getDb } from '../../server/db';
+import { getSettings } from '../../server/settings';
+import { formatDate, formatTime } from '../../server/format';
+import { mediaUrl } from '../../server/storage/r2';
+
+const { slug } = Astro.params;
+const settings = await getSettings();
+const db = getDb();
+const user = Astro.locals.user;
+
+const [event] = await db.select().from(events).where(eq(events.slug, slug ?? '')).limit(1);
+const visible = event && (event.status !== 'draft' || user?.role === 'admin');
+if (!event || !visible) Astro.response.status = 404;
+
+const [countRows, mineRows] = event
+  ? await Promise.all([
+      db
+        .select({ value: count() })
+        .from(eventRegistrations)
+        .where(
+          and(
+            eq(eventRegistrations.eventId, event.id),
+            inArray(eventRegistrations.status, ['registered', 'attended']),
+          ),
+        ),
+      user
+        ? db
+            .select()
+            .from(eventRegistrations)
+            .where(
+              and(eq(eventRegistrations.eventId, event.id), eq(eventRegistrations.userId, user.id)),
+            )
+            .limit(1)
+        : Promise.resolve([]),
+    ])
+  : [[{ value: 0 }], []];
+
+const registered = Number(countRows[0]?.value ?? 0);
+const mine = mineRows[0] ?? null;
+const isPast = event ? event.startsAt < Date.now() : false;
+const closed =
+  event &&
+  (event.status === 'cancelled' ||
+    (event.registrationClosesAt != null && event.registrationClosesAt < Date.now()) ||
+    event.status === 'done');
+const feedback = Astro.url.searchParams.get('sukses') ?? Astro.url.searchParams.get('error');
+const feedbackType = Astro.url.searchParams.get('error') ? 'error' : 'success';
+const modeLabel: Record<string, string> = { offline: 'Offline', online: 'Online', hybrid: 'Hybrid' };
+const cover = mediaUrl(event?.coverKey);
+const eventOrigin = new URL(Astro.site ?? Astro.url).origin;
+---
+
+<PublicLayout
+  settings={settings}
+  active="agenda"
+  title={event ? event.title : 'Agenda'}
+  description={event?.descriptionMd.slice(0, 180)}
+  noindex={!visible}
+  image={event?.coverKey}
+  type="event"
+  jsonLd={visible && event ? {
+    '@context': 'https://schema.org',
+    '@type': 'Event',
+    name: event.title,
+    description: event.descriptionMd.slice(0, 300),
+    startDate: new Date(event.startsAt).toISOString(),
+    endDate: event.endsAt ? new Date(event.endsAt).toISOString() : undefined,
+    eventStatus:
+      event.status === 'cancelled'
+        ? 'https://schema.org/EventCancelled'
+        : 'https://schema.org/EventScheduled',
+    eventAttendanceMode:
+      event.mode === 'online'
+        ? 'https://schema.org/OnlineEventAttendanceMode'
+        : event.mode === 'hybrid'
+          ? 'https://schema.org/MixedEventAttendanceMode'
+          : 'https://schema.org/OfflineEventAttendanceMode',
+    location:
+      event.mode === 'online'
+        ? { '@type': 'VirtualLocation', url: `${eventOrigin}/agenda/${event.slug}` }
+        : { '@type': 'Place', name: event.location ?? settings['site.name'], address: event.location ?? undefined },
+    image: cover ? new URL(cover, eventOrigin).href : undefined,
+    organizer: { '@type': 'Organization', name: settings['site.name'], url: eventOrigin },
+    url: `${eventOrigin}/agenda/${event.slug}`,
+  } : undefined}
+>
+  {
+    !event || !visible ? (
+      <div class="public-container" style="padding:4rem 1rem">
+        <p class="eyebrow">404</p>
+        <h1 class="page-title" style="margin-top:0.4rem">Agenda tidak ditemukan</h1>
+        <a class="btn btn-secondary" href="/agenda" style="margin-top:1rem">
+          <ArrowLeft size={16} /> Semua agenda
+        </a>
+      </div>
+    ) : (
+      <div class="public-container" style="padding-top:1.75rem;padding-bottom:2rem">
+        <a class="btn btn-ghost btn-sm" href="/agenda" style="margin-bottom:1rem">
+          <ArrowLeft size={15} stroke-width={2} /> Agenda
+        </a>
+
+        {feedback && (
+          <div class:list={['alert', feedbackType === 'error' ? 'alert-error' : 'alert-success']} style="margin-bottom:1rem">
+            {feedback}
+          </div>
+        )}
+
+        <div class="grid-2" style="grid-template-columns:minmax(0,1fr) 340px;align-items:start">
+          <article class="solid-panel" style="padding:1.5rem">
+            {cover && (
+              <img
+                src={cover}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                style="width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:14px;margin-bottom:1.1rem"
+              />
+            )}
+            <div class="row wrap" style="gap:0.5rem">
+              <Badge variant="accent">{modeLabel[event.mode]}</Badge>
+              {event.status === 'cancelled' && <Badge variant="danger">Dibatalkan</Badge>}
+              {isPast && <Badge>Sudah berlangsung</Badge>}
+              {event.capacity && <Badge>Kuota {registered}/{event.capacity}</Badge>}
+            </div>
+
+            <h1 class="section-title" style="margin-top:0.75rem;font-size:clamp(1.7rem,1.4rem + 1.4vw,2.3rem)">
+              {event.title}
+            </h1>
+
+            <div class="meta-row" style="margin-top:0.75rem">
+              <span class="meta-item">
+                <CalendarDays size={14} stroke-width={1.8} /> {formatDate(event.startsAt)}
+              </span>
+              <span class="meta-item">
+                <Clock size={14} stroke-width={1.8} /> {formatTime(event.startsAt)}
+                {event.endsAt ? ` – ${formatTime(event.endsAt)}` : ''} WIB
+              </span>
+              {event.location && (
+                <span class="meta-item">
+                  <MapPin size={14} stroke-width={1.8} /> {event.location}
+                </span>
+              )}
+            </div>
+
+            <hr class="divider" style="margin:1.25rem 0" />
+            <div class="prose-content" set:html={event.descriptionHtml} />
+          </article>
+
+          <aside class="stack" style="position:sticky;top:calc(var(--toolbar-height) + 1rem)">
+            <div class="glass-panel" style="padding:1.25rem">
+              <div class="row" style="gap:0.5rem;font-weight:650">
+                <Ticket size={17} stroke-width={1.9} /> Pendaftaran
+              </div>
+
+              {mine?.status === 'registered' || mine?.status === 'attended' ? (
+                <div style="margin-top:0.85rem">
+                  <div class="alert alert-success" role="status" style="display:flex;align-items:center;gap:0.45rem">
+                    <CircleCheck size={16} stroke-width={2} />
+                    {mine.status === 'attended' ? 'Anda tercatat hadir.' : 'Anda terdaftar di agenda ini.'}
+                  </div>
+                  {mine.guests > 0 && (
+                    <p class="muted" style="font-size:0.84rem;margin:0.5rem 0 0">
+                      Termasuk {mine.guests} tamu.
+                    </p>
+                  )}
+                  {!isPast && (
+                    <form method="POST" action={actions.events.cancel} style="margin-top:0.75rem">
+                      <input type="hidden" name="eventId" value={event.id} />
+                      <input type="hidden" name="slug" value={event.slug} />
+                      <button class="btn btn-secondary btn-block" type="submit">Batalkan pendaftaran</button>
+                    </form>
+                  )}
+                </div>
+              ) : mine?.status === 'waitlist' ? (
+                <div style="margin-top:0.85rem">
+                  <div class="alert alert-info" role="status">
+                    Anda berada di daftar tunggu. Kami akan menghubungi jika ada kuota kosong.
+                  </div>
+                  <form method="POST" action={actions.events.cancel} style="margin-top:0.75rem">
+                    <input type="hidden" name="eventId" value={event.id} />
+                    <input type="hidden" name="slug" value={event.slug} />
+                    <button class="btn btn-secondary btn-block" type="submit">Keluar dari daftar tunggu</button>
+                  </form>
+                </div>
+              ) : !user ? (
+                <div style="margin-top:0.85rem">
+                  <p class="muted" style="font-size:0.86rem;margin:0 0 0.7rem">
+                    Masuk sebagai alumni untuk mendaftar agenda.
+                  </p>
+                  <a class="btn btn-primary btn-block" href={`/masuk?next=/agenda/${event.slug}`}>
+                    <UserRound size={16} /> Masuk
+                  </a>
+                </div>
+              ) : closed ? (
+                <p class="muted" style="font-size:0.86rem;margin:0.85rem 0 0">
+                  Pendaftaran agenda ini sudah ditutup.
+                </p>
+              ) : (
+                <form method="POST" action={actions.events.rsvp} class="stack" style="gap:0.6rem;margin-top:0.85rem">
+                  <input type="hidden" name="eventId" value={event.id} />
+                  <input type="hidden" name="slug" value={event.slug} />
+                  {event.capacity != null && registered >= event.capacity && (
+                    <div class="alert alert-info" role="status" style="font-size:0.8rem">
+                      Kuota sudah penuh. Pendaftaran akan masuk daftar tunggu.
+                    </div>
+                  )}
+                  <div class="field">
+                    <label class="label" for="rsvp-phone">Nomor HP</label>
+                    <input class="input" id="rsvp-phone" name="phone" maxlength="30" inputmode="tel" />
+                  </div>
+                  <div class="field">
+                    <label class="label" for="rsvp-guests">Jumlah tamu (maks 5)</label>
+                    <input class="input" id="rsvp-guests" name="guests" type="number" min="0" max="5" value="0" />
+                  </div>
+                  <div class="field">
+                    <label class="label" for="rsvp-note">Catatan</label>
+                    <textarea class="textarea" id="rsvp-note" name="note" maxlength="500" rows="3" />
+                  </div>
+                  <button class="btn btn-primary btn-block" type="submit">Daftar agenda</button>
+                </form>
+              )}
+            </div>
+
+            <div class="solid-panel" style="padding:1.1rem">
+              <div class="row" style="gap:0.4rem;font-size:0.85rem;color:var(--text-secondary)">
+                <Users size={15} stroke-width={1.9} /> {registered} peserta terdaftar
+              </div>
+              {event.capacity && (
+                <p class="tertiary" style="font-size:0.78rem;margin:0.35rem 0 0">
+                  Kuota {event.capacity} orang.
+                </p>
+              )}
+            </div>
+          </aside>
+        </div>
+      </div>
+    )
+  }
+</PublicLayout>

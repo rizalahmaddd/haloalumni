@@ -1,0 +1,168 @@
+---
+import { actions } from 'astro:actions';
+import { eq } from 'drizzle-orm';
+import { Save } from '@lucide/astro';
+import AccountLayout from '../../layouts/AccountLayout.astro';
+import PhotoUpload from '../../components/account/PhotoUpload';
+import Badge from '../../components/ui/Badge.astro';
+import { alumniProfiles, getDb } from '../../server/db';
+import { getSettings } from '../../server/settings';
+
+const settings = await getSettings();
+const user = Astro.locals.user!;
+const [profile] = await getDb()
+  .select()
+  .from(alumniProfiles)
+  .where(eq(alumniProfiles.userId, user.id))
+  .limit(1);
+
+const error = Astro.url.searchParams.get('error');
+const sukses = Astro.url.searchParams.get('sukses');
+const yearLabel = settings['site.year_label'];
+const programLabel = settings['site.program_label'];
+const nimLabel = settings['site.nim_label'];
+---
+
+<AccountLayout settings={settings} title="Profil" active="profil">
+  <div class="spread wrap" style="margin-bottom:1.25rem">
+    <div>
+      <h1 class="section-title">Profil alumni</h1>
+      <p class="muted" style="margin:0.3rem 0 0;font-size:0.88rem">
+        Data ini tampil di direktori sesuai pengaturan privasi di bawah.
+      </p>
+    </div>
+    {profile && <Badge variant={profile.status === 'published' ? 'success' : 'warning'}>{profile.status === 'published' ? 'Terbit' : 'Menunggu verifikasi'}</Badge>}
+  </div>
+
+  {error && <div class="alert alert-error" role="alert" style="margin-bottom:1rem">{error}</div>}
+  {sukses && <div class="alert alert-success" role="status" style="margin-bottom:1rem">{sukses}</div>}
+
+  {
+    profile ? (
+      <form method="POST" action={actions.alumni.updateProfile} class="stack" style="gap:1.25rem">
+        <section class="solid-panel" style="padding:1.35rem">
+          <h2 class="section-title" style="font-size:1.05rem">Identitas</h2>
+          <div style="margin-top:1rem">
+            <PhotoUpload photoKey={profile.photoKey} thumbKey={profile.thumbKey} />
+          </div>
+
+          <div class="grid-2" style="gap:0.8rem;margin-top:1.1rem">
+            <div class="field">
+              <label class="label" for="fullName">Nama lengkap</label>
+              <input class="input" id="fullName" name="fullName" required maxlength="120" value={profile.fullName} />
+            </div>
+            <div class="field">
+              <label class="label" for="angkatan">{yearLabel}</label>
+              <input class="input" id="angkatan" name="angkatan" required inputmode="numeric" value={profile.angkatan} />
+            </div>
+            <div class="field">
+              <label class="label" for="program">{programLabel}</label>
+              <input class="input" id="program" name="program" maxlength="120" value={profile.program ?? ''} />
+            </div>
+            <div class="field">
+              <label class="label" for="nim">{nimLabel}</label>
+              <input class="input" id="nim" name="nim" maxlength="40" value={profile.nim ?? ''} />
+            </div>
+          </div>
+        </section>
+
+        <section class="solid-panel" style="padding:1.35rem">
+          <h2 class="section-title" style="font-size:1.05rem">Karier</h2>
+          <div class="grid-2" style="gap:0.8rem;margin-top:1rem">
+            <div class="field">
+              <label class="label" for="company">Perusahaan</label>
+              <input class="input" id="company" name="company" maxlength="120" value={profile.company ?? ''} />
+            </div>
+            <div class="field">
+              <label class="label" for="jobTitle">Jabatan</label>
+              <input class="input" id="jobTitle" name="jobTitle" maxlength="120" value={profile.jobTitle ?? ''} />
+            </div>
+            <div class="field">
+              <label class="label" for="industry">Industri</label>
+              <input class="input" id="industry" name="industry" maxlength="80" value={profile.industry ?? ''} />
+            </div>
+            <div class="field">
+              <label class="label" for="city">Kota</label>
+              <input class="input" id="city" name="city" maxlength="80" value={profile.city ?? ''} />
+            </div>
+            <div class="field">
+              <label class="label" for="province">Provinsi</label>
+              <input class="input" id="province" name="province" maxlength="80" value={profile.province ?? ''} />
+            </div>
+            <div class="field">
+              <label class="label" for="country">Negara</label>
+              <input class="input" id="country" name="country" maxlength="80" value={profile.country ?? 'Indonesia'} />
+            </div>
+          </div>
+
+          <div class="field" style="margin-top:0.8rem">
+            <label class="label" for="bio">Bio singkat</label>
+            <textarea class="textarea" id="bio" name="bio" maxlength="1200" rows="4" value={profile.bio ?? ''} />
+            <span class="hint">Maks 1200 karakter. Tampil di profil publik.</span>
+          </div>
+        </section>
+
+        <section class="solid-panel" style="padding:1.35rem">
+          <h2 class="section-title" style="font-size:1.05rem">Kontak & tautan</h2>
+          <div class="grid-2" style="gap:0.8rem;margin-top:1rem">
+            <div class="field">
+              <label class="label" for="phone">Nomor HP</label>
+              <input class="input" id="phone" name="phone" maxlength="30" value={profile.phone ?? ''} />
+            </div>
+            <div class="field">
+              <label class="label" for="whatsapp">WhatsApp</label>
+              <input class="input" id="whatsapp" name="whatsapp" maxlength="30" value={profile.whatsapp ?? ''} />
+            </div>
+            <div class="field">
+              <label class="label" for="linkedinUrl">LinkedIn</label>
+              <input class="input" id="linkedinUrl" name="linkedinUrl" type="url" maxlength="300" value={profile.linkedinUrl ?? ''} />
+            </div>
+            <div class="field">
+              <label class="label" for="instagramUrl">Instagram</label>
+              <input class="input" id="instagramUrl" name="instagramUrl" type="url" maxlength="300" value={profile.instagramUrl ?? ''} />
+            </div>
+            <div class="field" style="grid-column:1 / -1">
+              <label class="label" for="websiteUrl">Situs web</label>
+              <input class="input" id="websiteUrl" name="websiteUrl" type="url" maxlength="300" value={profile.websiteUrl ?? ''} />
+            </div>
+          </div>
+        </section>
+
+        <section class="solid-panel" style="padding:1.35rem">
+          <h2 class="section-title" style="font-size:1.05rem">Privasi</h2>
+          <div class="stack" style="gap:0.7rem;margin-top:0.9rem">
+            <label class="checkbox-row">
+              <input type="checkbox" name="directoryVisible" checked={profile.directoryVisible} />
+              <span>Tampilkan profil saya di direktori alumni</span>
+            </label>
+            <label class="checkbox-row">
+              <input type="checkbox" name="showWorkplace" checked={profile.showWorkplace} />
+              <span>Tampilkan perusahaan dan jabatan</span>
+            </label>
+            <label class="checkbox-row">
+              <input type="checkbox" name="showEmail" checked={profile.showEmail} />
+              <span>Tampilkan email ke anggota yang sudah masuk</span>
+            </label>
+            <label class="checkbox-row">
+              <input type="checkbox" name="showPhone" checked={profile.showPhone} />
+              <span>Tampilkan nomor HP/WhatsApp ke anggota yang sudah masuk</span>
+            </label>
+          </div>
+        </section>
+
+        <div class="row">
+          <button class="btn btn-primary" type="submit">
+            <Save size={16} stroke-width={1.9} /> Simpan profil
+          </button>
+          {profile.cardToken && (
+            <a class="btn btn-secondary" href="/akun/kartu">Lihat kartu alumni</a>
+          )}
+        </div>
+      </form>
+    ) : (
+      <div class="alert alert-info" role="status">
+        Akun ini belum memiliki profil alumni. Hubungi admin untuk melengkapi data.
+      </div>
+    )
+  }
+</AccountLayout>

@@ -1,0 +1,133 @@
+---
+import { eq } from 'drizzle-orm';
+import { CircleAlert, Printer, QrCode, ShieldCheck } from '@lucide/astro';
+import AccountLayout from '../../layouts/AccountLayout.astro';
+import AlumniCard from '../../components/card/AlumniCard.astro';
+import { alumniProfiles, getDb } from '../../server/db';
+import { getSettings } from '../../server/settings';
+import { formatDate } from '../../server/format';
+import { mediaUrl } from '../../server/storage/r2';
+
+const settings = await getSettings();
+const user = Astro.locals.user!;
+const [profile] = await getDb()
+  .select()
+  .from(alumniProfiles)
+  .where(eq(alumniProfiles.userId, user.id))
+  .limit(1);
+
+const origin = Astro.site ?? Astro.url.origin;
+const verifyUrl = profile?.cardToken ? new URL(`/verifikasi/${profile.cardToken}`, origin).href : '';
+const yearLabel = settings['site.year_label'];
+const logoUrl = mediaUrl(settings['site.logo_key']);
+---
+
+<AccountLayout settings={settings} title="Kartu alumni" active="kartu" printCard={true}>
+  <div class="spread wrap" style="margin-bottom:1.25rem;align-items:flex-end">
+    <div>
+      <p class="eyebrow" style="margin:0 0 0.35rem">Kartu anggota</p>
+      <h1 class="section-title">Kartu alumni digital</h1>
+      <p class="muted" style="margin:0.3rem 0 0;font-size:0.88rem">
+        Tunjukkan kartu ini untuk verifikasi keanggotaan. QR mengarah ke halaman verifikasi publik. Saat dicetak, hanya kartu yang muncul.
+      </p>
+    </div>
+    {
+      profile?.cardToken && (
+        <button class="btn btn-secondary btn-sm no-print" type="button" title="Cetak hanya kartu" onclick="window.print()">
+          <Printer size={15} stroke-width={1.9} /> Cetak kartu
+        </button>
+      )
+    }
+  </div>
+
+  {
+    profile?.cardToken && profile.cardNo ? (
+      <div class="grid-2 card-layout" style="grid-template-columns:minmax(0,520px) minmax(0,1fr);align-items:start">
+        <div>
+          <div class="card-stage">
+            <AlumniCard
+              profile={{
+                fullName: profile.fullName,
+                angkatan: profile.angkatan,
+                program: profile.program,
+                photoKey: profile.photoKey,
+                cardNo: profile.cardNo,
+              }}
+              siteName={settings['site.name']}
+              yearLabel={yearLabel}
+              verifyUrl={verifyUrl}
+              logoUrl={logoUrl}
+            />
+          </div>
+          <div class="card-caption">
+            <span>{settings['site.name']}</span>
+            <span>Diterbitkan {formatDate(profile.verifiedAt)}</span>
+          </div>
+        </div>
+
+        <aside class="stack">
+          <div class="solid-panel card-details">
+            <div class="spread" style="align-items:flex-start">
+              <div>
+                <h2 class="section-title" style="font-size:1.05rem">Detail keanggotaan</h2>
+                <p class="muted" style="margin:0.3rem 0 0;font-size:0.82rem">
+                  Data yang tampil di kartu dan halaman verifikasi.
+                </p>
+              </div>
+              <span class="badge badge-success">Aktif</span>
+            </div>
+
+            <div style="margin-top:1rem">
+              <div class="card-detail-row">
+                <span class="tertiary">Nomor kartu</span>
+                <strong class="tabular">{profile.cardNo}</strong>
+              </div>
+              <div class="card-detail-row">
+                <span class="tertiary">{settings['site.year_label']}</span>
+                <span>{profile.angkatan}</span>
+              </div>
+              <div class="card-detail-row">
+                <span class="tertiary">{settings['site.program_label']}</span>
+                <span>{profile.program ?? '—'}</span>
+              </div>
+              <div class="card-detail-row">
+                <span class="tertiary">Diverifikasi</span>
+                <span>{formatDate(profile.verifiedAt)}</span>
+              </div>
+            </div>
+
+            <div class="row wrap" style="margin-top:1.1rem">
+              <a class="btn btn-primary btn-sm" href={verifyUrl} target="_blank" rel="noopener">
+                Buka verifikasi publik
+              </a>
+            </div>
+          </div>
+
+          <div class="glass-panel" style="padding:1.25rem">
+            <div class="row" style="gap:0.45rem;font-weight:650;font-size:0.92rem">
+              <ShieldCheck size={16} stroke-width={1.9} /> Privasi terjaga
+            </div>
+            <p class="muted" style="font-size:0.84rem;margin:0.45rem 0 0;line-height:1.6">
+              Halaman verifikasi hanya menampilkan nama, angkatan, program, nomor kartu, dan status
+              keanggotaan. Email dan nomor HP tidak pernah ditampilkan.
+            </p>
+          </div>
+        </aside>
+      </div>
+    ) : (
+      <div class="glass-panel" style="padding:1.5rem;max-width:560px">
+        <div class="row" style="gap:0.5rem;color:var(--warning)">
+          <CircleAlert size={18} stroke-width={2} />
+          <strong style="font-size:0.95rem">Kartu belum diterbitkan</strong>
+        </div>
+        <p class="muted" style="font-size:0.88rem;margin:0.5rem 0 1rem;line-height:1.6">
+          Kartu alumni diterbitkan otomatis setelah admin memverifikasi keanggotaan Anda. Lengkapi profil
+          terlebih dahulu agar data kartu sesuai.
+        </p>
+        <a class="btn btn-secondary btn-sm" href="/akun/profil">
+          <QrCode size={15} stroke-width={1.9} /> Lengkapi profil
+        </a>
+      </div>
+    )
+  }
+</AccountLayout>

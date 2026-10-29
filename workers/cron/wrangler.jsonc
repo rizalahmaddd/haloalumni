@@ -1,0 +1,23 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "alumni-cron",
+  "workers_dev": false,
+  "account_id": "baf60cca6b50fa6ce5b75d25d0443220",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-26",
+  "compatibility_flags": ["nodejs_compat"],
+  "triggers": {
+    "crons": ["0 18 * * *", "0 18 * * SUN"]
+  },
+  "vars": {
+    "EMAIL_FROM": "Alumni <no-reply@haloalumni.my.id>"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "alumni-db",
+      // Samakan dengan database_id di wrangler.jsonc utama
+      "database_id": "13032683-df2f-4574-87bb-41ea5cda86d6"
+    }
+  ]
+}

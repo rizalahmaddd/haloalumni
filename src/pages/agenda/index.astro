@@ -1,0 +1,85 @@
+---
+import { and, count, desc, eq, gt, inArray, lt } from 'drizzle-orm';
+import { CalendarDays } from '@lucide/astro';
+import PublicLayout from '../../layouts/PublicLayout.astro';
+import EventCard from '../../components/public/EventCard.astro';
+import EmptyState from '../../components/ui/EmptyState.astro';
+import { eventRegistrations, events, getDb } from '../../server/db';
+import { getSettings } from '../../server/settings';
+
+const settings = await getSettings();
+const db = getDb();
+const timestamp = Date.now();
+
+const [upcoming, past] = await Promise.all([
+  db
+    .select()
+    .from(events)
+    .where(and(eq(events.status, 'published'), gt(events.startsAt, timestamp)))
+    .orderBy(events.startsAt)
+    .limit(24),
+  db
+    .select()
+    .from(events)
+    .where(and(inArray(events.status, ['published', 'done']), lt(events.startsAt, timestamp)))
+    .orderBy(desc(events.startsAt))
+    .limit(9),
+]);
+
+const ids = [...upcoming, ...past].map((event) => event.id);
+const counts = ids.length
+  ? await db
+      .select({ eventId: eventRegistrations.eventId, value: count() })
+      .from(eventRegistrations)
+      .where(and(inArray(eventRegistrations.eventId, ids), eq(eventRegistrations.status, 'registered')))
+      .groupBy(eventRegistrations.eventId)
+  : [];
+const countMap = new Map(counts.map((row) => [row.eventId, Number(row.value)]));
+---
+
+<PublicLayout
+  settings={settings}
+  active="agenda"
+  title="Agenda Alumni"
+  description="Reuni, webinar, dan kegiatan alumni yang akan datang."
+>
+  <div class="public-container" style="padding-top:2rem;padding-bottom:2rem">
+    <div class="section-head" style="align-items:flex-start">
+      <div>
+        <p class="eyebrow">Agenda</p>
+        <h1 class="page-title" style="margin-top:0.35rem">Kegiatan alumni</h1>
+        <p class="muted" style="margin:0.5rem 0 0;font-size:0.95rem">
+          Reuni, webinar, dan kegiatan lintas angkatan. RSVP membutuhkan akun alumni.
+        </p>
+      </div>
+    </div>
+
+    <h2 class="section-title" style="font-size:1.15rem;margin:1.5rem 0 0.85rem">Akan datang</h2>
+    {
+      upcoming.length > 0 ? (
+        <div class="grid-auto">
+          {upcoming.map((event) => (
+            <EventCard event={event} registered={countMap.get(event.id) ?? 0} />
+          ))}
+        </div>
+      ) : (
+        <EmptyState title="Belum ada agenda mendatang" description="Agenda baru akan diumumkan melalui berita.">
+          <CalendarDays size={26} stroke-width={1.6} style="color:var(--text-tertiary)" />
+        </EmptyState>
+      )
+    }
+
+    {
+      past.length > 0 && (
+        <>
+          <h2 class="section-title" style="font-size:1.15rem;margin:2.25rem 0 0.85rem">Sudah berlangsung</h2>
+          <div class="grid-auto" style="opacity:0.85">
+            {past.map((event) => (
+              <EventCard event={event} registered={countMap.get(event.id) ?? 0} />
+            ))}
+          </div>
+        </>
+      )
+    }
+  </div>
+</PublicLayout>

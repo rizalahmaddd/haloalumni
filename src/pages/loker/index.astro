@@ -1,0 +1,143 @@
+---
+import { and, asc, count, desc, eq, gt, isNull, like, or, type SQL } from 'drizzle-orm';
+import { Briefcase, Plus } from '@lucide/astro';
+import PublicLayout from '../../layouts/PublicLayout.astro';
+import SearchFilters from '../../components/public/SearchFilters.astro';
+import JobRow from '../../components/public/JobRow.astro';
+import Pagination from '../../components/ui/Pagination.astro';
+import EmptyState from '../../components/ui/EmptyState.astro';
+import { getDb, jobs } from '../../server/db';
+import { getSettings } from '../../server/settings';
+import { sanitizeSearchTerm } from '../../server/url';
+
+const settings = await getSettings();
+const db = getDb();
+const url = Astro.url;
+const q = (url.searchParams.get('q') ?? '').trim();
+const kategori = (url.searchParams.get('kategori') ?? '').trim();
+const lokasi = (url.searchParams.get('lokasi') ?? '').trim();
+const mode = (url.searchParams.get('mode') ?? '').trim();
+const tipe = (url.searchParams.get('tipe') ?? '').trim();
+const page = Math.max(1, Math.min(40, Number.parseInt(url.searchParams.get('page') ?? '1', 10) || 1));
+const pageSize = 20;
+const timestamp = Date.now();
+
+const conditions: SQL[] = [
+  eq(jobs.status, 'published'),
+  or(isNull(jobs.expiresAt), gt(jobs.expiresAt, timestamp))!,
+];
+if (q) {
+  const term = `%${sanitizeSearchTerm(q)}%`;
+  conditions.push(or(like(jobs.title, term), like(jobs.company, term))!);
+}
+if (kategori) conditions.push(eq(jobs.category, kategori));
+if (lokasi) conditions.push(like(jobs.location, `%${sanitizeSearchTerm(lokasi)}%`));
+if (['onsite', 'hybrid', 'remote'].includes(mode)) {
+  conditions.push(eq(jobs.workMode, mode as 'onsite' | 'hybrid' | 'remote'));
+}
+if (['full', 'part', 'contract', 'internship', 'freelance'].includes(tipe)) {
+  conditions.push(
+    eq(jobs.employmentType, tipe as 'full' | 'part' | 'contract' | 'internship' | 'freelance'),
+  );
+}
+
+const where = and(...conditions);
+
+const [rows, totalRows, categories] = await Promise.all([
+  db
+    .select()
+    .from(jobs)
+    .where(where)
+    .orderBy(desc(jobs.featured), desc(jobs.publishedAt), asc(jobs.title))
+    .limit(pageSize)
+    .offset((page - 1) * pageSize),
+  db.select({ value: count() }).from(jobs).where(where),
+  db
+    .selectDistinct({ value: jobs.category })
+    .from(jobs)
+    .where(and(eq(jobs.status, 'published')))
+    .limit(40),
+]);
+
+const total = Number(totalRows[0]?.value ?? 0);
+const totalPages = Math.max(1, Math.ceil(total / pageSize));
+const params = { q, kategori, lokasi, mode, tipe };
+---
+
+<PublicLayout
+  settings={settings}
+  active="loker"
+  title="Loker Alumni"
+  description="Peluang kerja dan magang dari jaringan alumni serta mitra."
+>
+  <div class="public-container" style="padding-top:2rem;padding-bottom:2rem">
+    <div class="section-head" style="align-items:flex-start">
+      <div>
+        <p class="eyebrow">Karier</p>
+        <h1 class="page-title" style="margin-top:0.35rem">Loker alumni</h1>
+        <p class="muted" style="margin:0.5rem 0 0;font-size:0.95rem">
+          {total} peluang aktif. Dikirim oleh alumni dan mitra, dimoderasi admin.
+        </p>
+      </div>
+      <a class="btn btn-primary" href="/loker/pasang">
+        <Plus size={16} stroke-width={2} /> Pasang loker
+      </a>
+    </div>
+
+    <SearchFilters
+      action="/loker"
+      values={params}
+      searchPlaceholder="Cari posisi atau perusahaan…"
+      fields={[
+        {
+          name: 'kategori',
+          label: 'Kategori',
+          type: 'select',
+          options: categories.filter((row) => row.value).map((row) => ({ value: row.value as string, label: row.value as string })),
+        },
+        { name: 'lokasi', label: 'Lokasi', placeholder: 'Jakarta, remote…' },
+        {
+          name: 'mode',
+          label: 'Mode kerja',
+          type: 'select',
+          options: [
+            { value: 'onsite', label: 'Onsite' },
+            { value: 'hybrid', label: 'Hybrid' },
+            { value: 'remote', label: 'Remote' },
+          ],
+        },
+        {
+          name: 'tipe',
+          label: 'Tipe kerja',
+          type: 'select',
+          options: [
+            { value: 'full', label: 'Full-time' },
+            { value: 'part', label: 'Part-time' },
+            { value: 'contract', label: 'Kontrak' },
+            { value: 'internship', label: 'Magang' },
+            { value: 'freelance', label: 'Freelance' },
+          ],
+        },
+      ]}
+    />
+
+    {
+      rows.length > 0 ? (
+        <div class="list-group">
+          {rows.map((job) => (
+            <JobRow job={job} />
+          ))}
+        </div>
+      ) : (
+        <EmptyState
+          title="Belum ada loker yang cocok"
+          description="Coba ubah filter, atau pasang loker pertama dari jaringan Anda."
+        >
+          <Briefcase size={26} stroke-width={1.6} style="color:var(--text-tertiary)" />
+        </EmptyState>
+      )
+    }
+
+    <Pagination page={page} totalPages={totalPages} basePath="/loker" params={params} />
+  </div>
+</PublicLayout>

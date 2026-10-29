@@ -1,0 +1,98 @@
+---
+import { and, count, desc, eq, type SQL } from 'drizzle-orm';
+import { Newspaper } from '@lucide/astro';
+import PublicLayout from '../../layouts/PublicLayout.astro';
+import PostCard from '../../components/public/PostCard.astro';
+import Pagination from '../../components/ui/Pagination.astro';
+import EmptyState from '../../components/ui/EmptyState.astro';
+import { getDb, posts } from '../../server/db';
+import { getSettings } from '../../server/settings';
+
+const settings = await getSettings();
+const db = getDb();
+const url = Astro.url;
+const category = (url.searchParams.get('kategori') ?? '').trim();
+const page = Math.max(1, Math.min(40, Number.parseInt(url.searchParams.get('page') ?? '1', 10) || 1));
+const pageSize = 9;
+
+const conditions: SQL[] = [eq(posts.status, 'published')];
+if (category) conditions.push(eq(posts.category, category));
+const where = and(...conditions);
+
+const [rows, totalRows, categories] = await Promise.all([
+  db
+    .select()
+    .from(posts)
+    .where(where)
+    .orderBy(desc(posts.publishedAt))
+    .limit(pageSize)
+    .offset((page - 1) * pageSize),
+  db.select({ value: count() }).from(posts).where(where),
+  db
+    .selectDistinct({ value: posts.category })
+    .from(posts)
+    .where(eq(posts.status, 'published'))
+    .limit(30),
+]);
+
+const total = Number(totalRows[0]?.value ?? 0);
+const totalPages = Math.max(1, Math.ceil(total / pageSize));
+---
+
+<PublicLayout
+  settings={settings}
+  active="berita"
+  title="Berita Alumni"
+  description="Kabar, cerita, dan pengumuman dari jaringan alumni."
+>
+  <div class="public-container" style="padding-top:2rem;padding-bottom:2rem">
+    <div class="section-head" style="align-items:flex-start">
+      <div>
+        <p class="eyebrow">Kabar</p>
+        <h1 class="page-title" style="margin-top:0.35rem">Berita alumni</h1>
+        <p class="muted" style="margin:0.5rem 0 0;font-size:0.95rem">
+          Cerita, program, dan pengumuman terbaru dari almamater.
+        </p>
+      </div>
+      <a class="btn btn-secondary btn-sm" href="/berita/rss.xml">RSS</a>
+    </div>
+
+    <div class="row wrap" style="gap:0.4rem;margin:1.25rem 0">
+      <a class="chip" href="/berita" aria-current={!category ? 'page' : undefined}>Semua</a>
+      {
+        categories
+          .filter((row) => row.value)
+          .map((row) => (
+            <a
+              class="chip"
+              href={`/berita?kategori=${encodeURIComponent(row.value as string)}`}
+              aria-current={category === row.value ? 'page' : undefined}
+            >
+              {row.value}
+            </a>
+          ))
+      }
+    </div>
+
+    {
+      rows.length > 0 ? (
+        <div class="grid-auto">
+          {rows.map((post) => (
+            <PostCard post={post} />
+          ))}
+        </div>
+      ) : (
+        <EmptyState title="Belum ada berita" description="Nantikan kabar terbaru dari sekretariat alumni.">
+          <Newspaper size={26} stroke-width={1.6} style="color:var(--text-tertiary)" />
+        </EmptyState>
+      )
+    }
+
+    <Pagination
+      page={page}
+      totalPages={totalPages}
+      basePath="/berita"
+      params={{ kategori: category }}
+    />
+  </div>
+</PublicLayout>

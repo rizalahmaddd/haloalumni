@@ -1,0 +1,197 @@
+---
+import { actions } from 'astro:actions';
+import { eq } from 'drizzle-orm';
+import { ArrowLeft, Save, Trash2 } from '@lucide/astro';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import MarkdownEditor from '../../../components/admin/MarkdownEditor';
+import MediaPicker from '../../../components/admin/MediaPicker';
+import Badge from '../../../components/ui/Badge.astro';
+import { getDb, jobs } from '../../../server/db';
+import { getSettings } from '../../../server/settings';
+import { toDateTimeLocal } from '../../../server/format';
+
+const { id } = Astro.params;
+const settings = await getSettings();
+const isNew = id === 'baru';
+const [job] = isNew
+  ? [null]
+  : await getDb()
+      .select()
+      .from(jobs)
+      .where(eq(jobs.id, id ?? ''))
+      .limit(1);
+
+if (!isNew && !job) Astro.response.status = 404;
+const error = Astro.url.searchParams.get('error');
+const sukses = Astro.url.searchParams.get('sukses');
+const durationDays = Math.max(7, Number.parseInt(settings['jobs.duration_days'], 10) || 30);
+const defaultExpiry = Date.now() + durationDays * 24 * 60 * 60 * 1000;
+---
+
+<AdminLayout settings={settings} title={isNew ? 'Tambah loker' : 'Edit loker'}>
+  <div class="spread wrap" style="margin-bottom:1.25rem">
+    <div>
+      <a class="btn btn-ghost btn-sm" href="/admin/loker" style="margin-bottom:0.5rem;margin-left:-0.4rem">
+        <ArrowLeft size={15} stroke-width={2} /> Loker
+      </a>
+      <h1 class="section-title">{isNew ? 'Tambah loker' : job?.title}</h1>
+      {job && (
+        <p class="muted" style="margin:0.3rem 0 0;font-size:0.85rem">
+          {job.company} · <Badge variant={job.status === 'published' ? 'success' : job.status === 'pending' ? 'warning' : 'default'}>{job.status}</Badge>
+        </p>
+      )}
+    </div>
+    {job && (
+      <div class="row wrap" style="gap:0.4rem">
+        {job.status !== 'published' && (
+          <form method="POST" action={actions.admin.moderateJob}>
+            <input type="hidden" name="id" value={job.id} />
+            <input type="hidden" name="action" value="publish" />
+            <button class="btn btn-primary btn-sm" type="submit">Terbitkan</button>
+          </form>
+        )}
+        {job.status === 'published' && (
+          <form method="POST" action={actions.admin.moderateJob}>
+            <input type="hidden" name="id" value={job.id} />
+            <input type="hidden" name="action" value="draft" />
+            <button class="btn btn-secondary btn-sm" type="submit">Jadikan draft</button>
+          </form>
+        )}
+        <a class="btn btn-secondary btn-sm" href={`/loker/${job.slug}`} target="_blank" rel="noopener">Lihat</a>
+      </div>
+    )}
+  </div>
+
+  {error && <div class="alert alert-error" role="alert" style="margin-bottom:1rem">{error}</div>}
+  {sukses && <div class="alert alert-success" role="status" style="margin-bottom:1rem">{sukses}</div>}
+
+  {
+    !isNew && !job ? (
+      <div class="alert alert-error" role="alert">Loker tidak ditemukan.</div>
+    ) : (
+      <form method="POST" action={actions.admin.saveJob} class="stack" style="gap:1.25rem">
+        {job && <input type="hidden" name="id" value={job.id} />}
+
+        <section class="solid-panel" style="padding:1.35rem">
+          <h2 class="section-title" style="font-size:1rem">Informasi utama</h2>
+          <div class="grid-2" style="gap:0.75rem;margin-top:0.9rem">
+            <div class="field">
+              <label class="label" for="title">Posisi</label>
+              <input class="input" id="title" name="title" required value={job?.title ?? ''} />
+            </div>
+            <div class="field">
+              <label class="label" for="company">Perusahaan</label>
+              <input class="input" id="company" name="company" required value={job?.company ?? ''} />
+            </div>
+            <div class="field">
+              <label class="label" for="slug">Slug</label>
+              <input class="input" id="slug" name="slug" value={job?.slug ?? ''} placeholder="otomatis" />
+            </div>
+            <div class="field">
+              <label class="label" for="location">Lokasi</label>
+              <input class="input" id="location" name="location" value={job?.location ?? ''} />
+            </div>
+            <div class="field">
+              <label class="label" for="workMode">Mode kerja</label>
+              <select class="select" id="workMode" name="workMode">
+                <option value="onsite" selected={job?.workMode === 'onsite'}>Onsite</option>
+                <option value="hybrid" selected={job?.workMode === 'hybrid'}>Hybrid</option>
+                <option value="remote" selected={job?.workMode === 'remote'}>Remote</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="label" for="employmentType">Tipe kerja</label>
+              <select class="select" id="employmentType" name="employmentType">
+                <option value="full" selected={job?.employmentType === 'full'}>Full-time</option>
+                <option value="part" selected={job?.employmentType === 'part'}>Part-time</option>
+                <option value="contract" selected={job?.employmentType === 'contract'}>Kontrak</option>
+                <option value="internship" selected={job?.employmentType === 'internship'}>Magang</option>
+                <option value="freelance" selected={job?.employmentType === 'freelance'}>Freelance</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="label" for="category">Kategori</label>
+              <input class="input" id="category" name="category" value={job?.category ?? ''} />
+            </div>
+            <div class="field">
+              <label class="label" for="status">Status</label>
+              <select class="select" id="status" name="status">
+                <option value="draft" selected={job?.status === 'draft'}>Draft</option>
+                <option value="pending" selected={job?.status === 'pending'}>Menunggu</option>
+                <option value="published" selected={job?.status === 'published'}>Terbit</option>
+                <option value="rejected" selected={job?.status === 'rejected'}>Ditolak</option>
+                <option value="expired" selected={job?.status === 'expired'}>Kedaluwarsa</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <section class="solid-panel" style="padding:1.35rem">
+          <h2 class="section-title" style="font-size:1rem">Deskripsi</h2>
+          <div style="margin-top:0.9rem">
+            <MarkdownEditor name="descriptionMd" initialValue={job?.descriptionMd ?? ''} client:idle />
+          </div>
+        </section>
+
+        <section class="solid-panel" style="padding:1.35rem">
+          <h2 class="section-title" style="font-size:1rem">Detail lamaran</h2>
+          <div class="grid-2" style="gap:0.75rem;margin-top:0.9rem">
+            <div class="field">
+              <label class="label" for="salaryMin">Gaji minimum</label>
+              <input class="input" id="salaryMin" name="salaryMin" inputmode="numeric" value={job?.salaryMin ?? ''} />
+            </div>
+            <div class="field">
+              <label class="label" for="salaryMax">Gaji maksimum</label>
+              <input class="input" id="salaryMax" name="salaryMax" inputmode="numeric" value={job?.salaryMax ?? ''} />
+            </div>
+            <div class="field">
+              <label class="label" for="applyUrl">URL lamaran</label>
+              <input class="input" id="applyUrl" name="applyUrl" value={job?.applyUrl ?? ''} />
+            </div>
+            <div class="field">
+              <label class="label" for="contactEmail">Email kontak</label>
+              <input class="input" id="contactEmail" name="contactEmail" value={job?.contactEmail ?? ''} />
+            </div>
+            <div class="field">
+              <label class="label" for="expiresAt">Berlaku hingga</label>
+              <input
+                class="input"
+                id="expiresAt"
+                name="expiresAt"
+                type="datetime-local"
+                value={toDateTimeLocal(job?.expiresAt ?? defaultExpiry)}
+              />
+            </div>
+            <div class="field">
+              <span class="label">Opsi</span>
+              <label class="checkbox-row" style="margin-top:0.55rem">
+                <input type="checkbox" name="featured" checked={job?.featured ?? false} />
+                <span>Tampilkan sebagai loker unggulan</span>
+              </label>
+            </div>
+          </div>
+          <div style="margin-top:0.9rem">
+            <MediaPicker name="companyLogoKey" label="Logo perusahaan" initialKey={job?.companyLogoKey ?? ''} folder="jobs" client:idle />
+          </div>
+        </section>
+
+        <div class="row wrap">
+          <button class="btn btn-primary" type="submit">
+            <Save size={16} stroke-width={1.9} /> Simpan loker
+          </button>
+          {job && (
+            <button
+              class="btn btn-danger"
+              type="submit"
+              formaction={actions.admin.deleteJob}
+              formnovalidate
+              onclick="return confirm('Hapus loker ini?')"
+            >
+              <Trash2 size={16} stroke-width={1.8} /> Hapus
+            </button>
+          )}
+        </div>
+      </form>
+    )
+  }
+</AdminLayout>

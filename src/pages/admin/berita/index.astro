@@ -1,0 +1,75 @@
+---
+import { desc } from 'drizzle-orm';
+import { Pencil, Plus } from '@lucide/astro';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import EmptyState from '../../../components/ui/EmptyState.astro';
+import { getDb, posts } from '../../../server/db';
+import { getSettings } from '../../../server/settings';
+import { formatDate } from '../../../server/format';
+
+const settings = await getSettings();
+const rows = await getDb().select().from(posts).orderBy(desc(posts.createdAt));
+const sukses = Astro.url.searchParams.get('sukses');
+const error = Astro.url.searchParams.get('error');
+---
+
+<AdminLayout settings={settings} title="Berita">
+  <div class="spread wrap" style="margin-bottom:1.25rem">
+    <div>
+      <h1 class="section-title">Berita</h1>
+      <p class="muted" style="margin:0.3rem 0 0;font-size:0.88rem">
+        Kelola artikel, pengumuman, dan cerita alumni.
+      </p>
+    </div>
+    <a class="btn btn-primary btn-sm" href="/admin/berita/baru">
+      <Plus size={15} stroke-width={2} /> Tulis berita
+    </a>
+  </div>
+
+  {error && <div class="alert alert-error" role="alert" style="margin-bottom:1rem">{error}</div>}
+  {sukses && <div class="alert alert-success" role="status" style="margin-bottom:1rem">{sukses}</div>}
+
+  {
+    rows.length > 0 ? (
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th scope="col">Judul</th>
+              <th scope="col">Kategori</th>
+              <th scope="col">Status</th>
+              <th scope="col">Terbit</th>
+              <th scope="col" style="text-align:right">Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((post) => (
+              <tr>
+                <td>
+                  <div style="font-weight:600">{post.title}</div>
+                  <div class="tertiary" style="font-size:0.75rem">/{post.slug}</div>
+                </td>
+                <td style="font-size:0.8rem">{post.category ?? '—'}</td>
+                <td><Badge variant={post.status === 'published' ? 'success' : 'default'}>{post.status}</Badge></td>
+                <td class="tertiary" style="font-size:0.78rem">{formatDate(post.publishedAt)}</td>
+                <td style="text-align:right">
+                  <div class="row" style="justify-content:flex-end;gap:0.3rem">
+                    {post.status === 'published' && (
+                      <a class="btn btn-ghost btn-sm" href={`/berita/${post.slug}`} target="_blank" rel="noopener">Lihat</a>
+                    )}
+                    <a class="btn btn-secondary btn-sm" href={`/admin/berita/${post.id}`}>
+                      <Pencil size={14} stroke-width={1.9} /> Edit
+                    </a>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    ) : (
+      <EmptyState title="Belum ada berita" description="Tulis berita pertama untuk ditampilkan di situs." />
+    )
+  }
+</AdminLayout>

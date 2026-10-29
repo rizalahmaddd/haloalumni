@@ -1,0 +1,101 @@
+---
+import { actions } from 'astro:actions';
+import { eq } from 'drizzle-orm';
+import { ArrowLeft, Save, Trash2 } from '@lucide/astro';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import MarkdownEditor from '../../../components/admin/MarkdownEditor';
+import Badge from '../../../components/ui/Badge.astro';
+import { getDb, pages } from '../../../server/db';
+import { getSettings } from '../../../server/settings';
+
+const { id } = Astro.params;
+const isNew = id === 'baru';
+const settings = await getSettings();
+const [page] = isNew
+  ? [null]
+  : await getDb()
+      .select()
+      .from(pages)
+      .where(eq(pages.id, id ?? ''))
+      .limit(1);
+
+if (!isNew && !page) Astro.response.status = 404;
+const error = Astro.url.searchParams.get('error');
+const sukses = Astro.url.searchParams.get('sukses');
+---
+
+<AdminLayout settings={settings} title={isNew ? 'Tambah halaman' : 'Edit halaman'}>
+  <a class="btn btn-ghost btn-sm" href="/admin/halaman" style="margin-bottom:1rem">
+    <ArrowLeft size={15} stroke-width={2} /> Halaman
+  </a>
+
+  <div class="spread wrap" style="margin-bottom:1.25rem">
+    <h1 class="section-title">{isNew ? 'Tambah halaman' : page?.title}</h1>
+    {page && <Badge variant={page.status === 'published' ? 'success' : 'default'}>{page.status}</Badge>}
+  </div>
+
+  {error && <div class="alert alert-error" role="alert" style="margin-bottom:1rem">{error}</div>}
+  {sukses && <div class="alert alert-success" role="status" style="margin-bottom:1rem">{sukses}</div>}
+
+  {
+    !isNew && !page ? (
+      <div class="alert alert-error" role="alert">Halaman tidak ditemukan.</div>
+    ) : (
+      <form method="POST" action={actions.admin.savePage} class="stack" style="gap:1.25rem">
+        {page && <input type="hidden" name="id" value={page.id} />}
+
+        <section class="solid-panel" style="padding:1.35rem">
+          <div class="grid-2" style="gap:0.75rem">
+            <div class="field">
+              <label class="label" for="title">Judul</label>
+              <input class="input" id="title" name="title" required value={page?.title ?? ''} />
+            </div>
+            <div class="field">
+              <label class="label" for="slug">Slug</label>
+              <input class="input" id="slug" name="slug" value={page?.slug ?? ''} placeholder="otomatis" />
+            </div>
+            <div class="field">
+              <label class="label" for="status">Status</label>
+              <select class="select" id="status" name="status">
+                <option value="published" selected={page?.status === 'published'}>Terbit</option>
+                <option value="draft" selected={page?.status === 'draft'}>Draft</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="label" for="sortOrder">Urutan footer</label>
+              <input class="input" id="sortOrder" name="sortOrder" inputmode="numeric" value={page?.sortOrder ?? 0} />
+            </div>
+          </div>
+          <label class="checkbox-row" style="margin-top:0.8rem">
+            <input type="checkbox" name="showInFooter" checked={page?.showInFooter ?? true} />
+            <span>Tampilkan tautan di footer</span>
+          </label>
+        </section>
+
+        <section class="solid-panel" style="padding:1.35rem">
+          <h2 class="section-title" style="font-size:1rem">Isi halaman</h2>
+          <div style="margin-top:0.9rem">
+            <MarkdownEditor name="contentMd" initialValue={page?.contentMd ?? ''} client:load />
+          </div>
+        </section>
+
+        <div class="row wrap">
+          <button class="btn btn-primary" type="submit">
+            <Save size={16} stroke-width={1.9} /> Simpan halaman
+          </button>
+          {page && (
+            <button
+              class="btn btn-danger"
+              type="submit"
+              formaction={actions.admin.deletePage}
+              formnovalidate
+              onclick="return confirm('Hapus halaman ini?')"
+            >
+              <Trash2 size={16} stroke-width={1.8} /> Hapus
+            </button>
+          )}
+        </div>
+      </form>
+    )
+  }
+</AdminLayout>

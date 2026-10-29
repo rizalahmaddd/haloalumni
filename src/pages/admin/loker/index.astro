@@ -1,0 +1,156 @@
+---
+import { actions } from 'astro:actions';
+import { and, count, desc, eq, like, or, type SQL } from 'drizzle-orm';
+import { Check, Pencil, Plus, Search, X } from '@lucide/astro';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import Pagination from '../../../components/ui/Pagination.astro';
+import EmptyState from '../../../components/ui/EmptyState.astro';
+import { getDb, jobs } from '../../../server/db';
+import { getSettings } from '../../../server/settings';
+import { formatDate } from '../../../server/format';
+import { sanitizeSearchTerm } from '../../../server/url';
+
+const settings = await getSettings();
+const db = getDb();
+const url = Astro.url;
+const q = (url.searchParams.get('q') ?? '').trim();
+const status = (url.searchParams.get('status') ?? 'all').trim();
+const page = Math.max(1, Math.min(100, Number.parseInt(url.searchParams.get('page') ?? '1', 10) || 1));
+const pageSize = 25;
+
+const conditions: SQL[] = [];
+if (['pending', 'published', 'rejected', 'expired', 'draft'].includes(status)) {
+  conditions.push(eq(jobs.status, status as 'pending' | 'published' | 'rejected' | 'expired' | 'draft'));
+}
+if (q) {
+  const term = `%${sanitizeSearchTerm(q)}%`;
+  conditions.push(or(like(jobs.title, term), like(jobs.company, term))!);
+}
+const where = conditions.length ? and(...conditions) : undefined;
+
+const [rows, totalRows] = await Promise.all([
+  db.select().from(jobs).where(where).orderBy(desc(jobs.createdAt)).limit(pageSize).offset((page - 1) * pageSize),
+  db.select({ value: count() }).from(jobs).where(where),
+]);
+
+const total = Number(totalRows[0]?.value ?? 0);
+const totalPages = Math.max(1, Math.ceil(total / pageSize));
+const error = url.searchParams.get('error');
+const sukses = url.searchParams.get('sukses');
+const tabs = [
+  { value: 'all', label: 'Semua' },
+  { value: 'pending', label: 'Menunggu' },
+  { value: 'published', label: 'Terbit' },
+  { value: 'rejected', label: 'Ditolak' },
+  { value: 'expired', label: 'Kedaluwarsa' },
+  { value: 'draft', label: 'Draft' },
+];
+const statusVariant: Record<string, 'success' | 'warning' | 'danger' | 'default'> = {
+  published: 'success',
+  pending: 'warning',
+  rejected: 'danger',
+  expired: 'default',
+  draft: 'default',
+};
+---
+
+<AdminLayout settings={settings} title="Loker">
+  <div class="spread wrap" style="margin-bottom:1.25rem">
+    <div>
+      <h1 class="section-title">Loker</h1>
+      <p class="muted" style="margin:0.3rem 0 0;font-size:0.88rem">
+        Moderasi kiriman loker dan kelola daftar lowongan aktif.
+      </p>
+    </div>
+    <a class="btn btn-primary btn-sm" href="/admin/loker/baru">
+      <Plus size={15} stroke-width={2} /> Tambah loker
+    </a>
+  </div>
+
+  {error && <div class="alert alert-error" role="alert" style="margin-bottom:1rem">{error}</div>}
+  {sukses && <div class="alert alert-success" role="status" style="margin-bottom:1rem">{sukses}</div>}
+
+  <div class="row wrap" style="gap:0.35rem;margin-bottom:0.75rem">
+    {
+      tabs.map((tab) => (
+        <a
+          class="chip"
+          href={`/admin/loker${tab.value === 'all' ? '' : `?status=${tab.value}`}`}
+          aria-current={status === tab.value ? 'page' : undefined}
+        >
+          {tab.label}
+        </a>
+      ))
+    }
+  </div>
+
+  <form method="get" action="/admin/loker" class="row" style="gap:0.5rem;margin-bottom:1rem">
+    <div class="search-field" style="flex:1;max-width:360px">
+      <Search size={15} />
+      <input name="q" value={q} placeholder="Cari posisi atau perusahaan…" />
+    </div>
+    {status !== 'all' && <input type="hidden" name="status" value={status} />}
+    <button class="btn btn-secondary btn-sm" type="submit">Cari</button>
+  </form>
+
+  {
+    rows.length > 0 ? (
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th scope="col">Posisi</th>
+              <th scope="col">Tipe</th>
+              <th scope="col">Status</th>
+              <th scope="col">Berlaku</th>
+              <th scope="col" style="text-align:right">Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((job) => (
+              <tr>
+                <td>
+                  <div style="font-weight:600">{job.title}</div>
+                  <div class="tertiary" style="font-size:0.75rem">{job.company} · {job.location ?? '—'}</div>
+                </td>
+                <td style="font-size:0.8rem">{job.workMode} / {job.employmentType}</td>
+                <td><Badge variant={statusVariant[job.status]}>{job.status}</Badge></td>
+                <td class="tertiary" style="font-size:0.78rem">{formatDate(job.expiresAt)}</td>
+                <td style="text-align:right">
+                  <div class="row" style="justify-content:flex-end;gap:0.3rem">
+                    {job.status === 'pending' && (
+                      <>
+                        <form method="POST" action={actions.admin.moderateJob}>
+                          <input type="hidden" name="id" value={job.id} />
+                          <input type="hidden" name="action" value="publish" />
+                          <button class="btn btn-primary btn-sm" type="submit">
+                            <Check size={14} stroke-width={2} /> Terbitkan
+                          </button>
+                        </form>
+                        <form method="POST" action={actions.admin.moderateJob} onsubmit="return confirm('Tolak loker ini?')">
+                          <input type="hidden" name="id" value={job.id} />
+                          <input type="hidden" name="action" value="reject" />
+                          <button class="btn btn-danger btn-sm" type="submit">
+                            <X size={14} stroke-width={2} />
+                          </button>
+                        </form>
+                      </>
+                    )}
+                    <a class="btn btn-secondary btn-sm" href={`/admin/loker/${job.id}`}>
+                      <Pencil size={14} stroke-width={1.9} /> Edit
+                    </a>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    ) : (
+      <EmptyState title="Tidak ada loker" description="Ubah filter atau tambahkan loker baru." />
+    )
+  }
+
+  <Pagination page={page} totalPages={totalPages} basePath="/admin/loker" params={{ q, status }} />
+</AdminLayout>

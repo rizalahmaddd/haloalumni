@@ -1,0 +1,96 @@
+---
+import { ShieldCheck } from '@lucide/astro';
+import QRCode from './QRCode';
+import { mediaUrl } from '../../server/storage/r2';
+
+interface Props {
+  profile: {
+    fullName: string;
+    angkatan: number;
+    program: string | null;
+    photoKey: string | null;
+    cardNo: string | null;
+  };
+  siteName: string;
+  yearLabel: string;
+  verifyUrl: string;
+  logoUrl?: string | null;
+}
+
+const { profile, siteName, yearLabel, verifyUrl, logoUrl } = Astro.props;
+const photo = mediaUrl(profile.photoKey);
+const initials = profile.fullName
+  .split(/\s+/)
+  .filter(Boolean)
+  .map((word) => word[0])
+  .slice(0, 2)
+  .join('')
+  .toUpperCase();
+const monogram = siteName
+  .split(/\s+/)
+  .filter(Boolean)
+  .slice(0, 2)
+  .map((word) => word[0])
+  .join('')
+  .toUpperCase();
+---
+
+<article class="alumni-card" aria-label={`Kartu alumni ${profile.fullName}`}>
+  <div class="alumni-card-inner">
+    <header class="alumni-card-top">
+      <div class="alumni-card-brand">
+        {
+          logoUrl ? (
+            <img class="alumni-card-logo" src={logoUrl} alt="" />
+          ) : (
+            <span class="alumni-card-monogram" aria-hidden="true">
+              {monogram || 'A'}
+            </span>
+          )
+        }
+        <span class="alumni-card-brandname">{siteName}</span>
+      </div>
+      <span class="alumni-card-kind">Alumni Card</span>
+    </header>
+
+    <div class="alumni-card-middle">
+      <div class="alumni-card-person">
+        {
+          photo ? (
+            <img class="alumni-card-photo" src={photo} alt="" />
+          ) : (
+            <span class="alumni-card-photo alumni-card-photo-fallback" aria-hidden="true">
+              {initials || '?'}
+            </span>
+          )
+        }
+        <div class="alumni-card-identity">
+          <h2 class="alumni-card-name">{profile.fullName}</h2>
+          <p class="alumni-card-meta">
+            {yearLabel} {profile.angkatan}{profile.program ? ` · ${profile.program}` : ''}
+          </p>
+          <p class="alumni-card-verified">
+            <ShieldCheck size={13} stroke-width={2.1} />
+            Anggota terverifikasi
+          </p>
+        </div>
+      </div>
+
+      <QRCode value={verifyUrl} size={74} />
+    </div>
+
+    <footer class="alumni-card-bottom">
+      <div class="alumni-card-number-group">
+        <span class="alumni-card-chip" aria-hidden="true"></span>
+        <div>
+          <span class="alumni-card-label">Nomor kartu</span>
+          <span class="alumni-card-number">{profile.cardNo ?? '—'}</span>
+        </div>
+      </div>
+      <div class="alumni-card-status">
+        <span class="alumni-card-dot" aria-hidden="true"></span>
+        Aktif
+      </div>
+    </footer>
+  </div>
+</article>

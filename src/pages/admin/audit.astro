@@ -1,0 +1,66 @@
+---
+import { desc, eq } from 'drizzle-orm';
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import EmptyState from '../../components/ui/EmptyState.astro';
+import { auditLogs, getDb, users } from '../../server/db';
+import { getSettings } from '../../server/settings';
+import { formatDateTime } from '../../server/format';
+
+if (Astro.locals.user?.role !== 'admin') return Astro.redirect('/admin');
+
+const settings = await getSettings();
+const rows = await getDb()
+  .select({
+    id: auditLogs.id,
+    action: auditLogs.action,
+    entityType: auditLogs.entityType,
+    entityId: auditLogs.entityId,
+    meta: auditLogs.meta,
+    createdAt: auditLogs.createdAt,
+    actorEmail: users.email,
+  })
+  .from(auditLogs)
+  .leftJoin(users, eq(auditLogs.actorId, users.id))
+  .orderBy(desc(auditLogs.createdAt))
+  .limit(150);
+---
+
+<AdminLayout settings={settings} title="Audit log">
+  <div style="margin-bottom:1.25rem">
+    <h1 class="section-title">Audit log</h1>
+    <p class="muted" style="margin:0.3rem 0 0;font-size:0.88rem">
+      Jejak aktivitas admin: persetujuan, moderasi, verifikasi donasi, dan perubahan pengaturan.
+    </p>
+  </div>
+
+  {
+    rows.length > 0 ? (
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th scope="col">Waktu</th>
+              <th scope="col">Aksi</th>
+              <th scope="col">Entitas</th>
+              <th scope="col">Aktor</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr>
+                <td class="tertiary" style="font-size:0.76rem;white-space:nowrap">{formatDateTime(row.createdAt)}</td>
+                <td style="font-size:0.8rem;font-weight:600">{row.action}</td>
+                <td class="tertiary" style="font-size:0.76rem">
+                  {row.entityType ?? '—'}{row.entityId ? ` · ${row.entityId.slice(0, 12)}…` : ''}
+                </td>
+                <td style="font-size:0.78rem">{row.actorEmail ?? 'sistem'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    ) : (
+      <EmptyState title="Belum ada aktivitas" description="Aktivitas admin akan tercatat di sini." />
+    )
+  }
+</AdminLayout>

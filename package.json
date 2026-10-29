@@ -1,0 +1,83 @@
+{
+  "name": "alumni",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Direktori alumni + CMS: profil alumni, loker, berita, agenda, donasi, dan kartu anggota digital dengan verifikasi QR. Astro di Cloudflare Workers + D1 + R2.",
+  "license": "MIT",
+  "author": "rizalahmaddd",
+  "homepage": "https://haloalumni.my.id",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rizalahmaddd/haloalumni.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rizalahmaddd/haloalumni/issues"
+  },
+  "keywords": [
+    "alumni",
+    "alumni-management",
+    "astro",
+    "cloudflare-workers",
+    "cloudflare-d1",
+    "cloudflare-r2",
+    "cms",
+    "directory",
+    "drizzle-orm",
+    "indonesia",
+    "qr-code",
+    "react",
+    "tailwindcss",
+    "typescript"
+  ],
+  "engines": {
+    "node": ">=22.23.4"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "wrangler dev",
+    "deploy": "node scripts/preflight.mjs && astro build && wrangler deploy",
+    "check": "astro check",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply alumni-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply alumni-db --remote",
+    "db:seed:local": "wrangler d1 execute alumni-db --local --file=./scripts/seed.sql && wrangler d1 execute alumni-db --local --file=./scripts/seed-realistic.sql",
+    "db:seed:remote": "wrangler d1 execute alumni-db --remote --file=./scripts/seed.sql && wrangler d1 execute alumni-db --remote --file=./scripts/seed-realistic.sql",
+    "db:promote": "bash scripts/promote-admin.sh",
+    "db:backup": "bash scripts/backup-d1.sh",
+    "deploy:cron": "node scripts/preflight.mjs && wrangler deploy --config workers/cron/wrangler.jsonc",
+    "test": "vitest run",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "^14.4.2",
+    "@astrojs/react": "^7.1.1",
+    "@lucide/astro": "^1.63.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "astro": "^7.4.2",
+    "date-fns": "^4.4.0",
+    "drizzle-orm": "^0.45.4",
+    "lucide-react": "^1.63.0",
+    "marked": "^18.1.2",
+    "nanoid": "^6.0.2",
+    "qrcode.react": "^4.2.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "sanitize-html": "^2.18.1",
+    "tailwindcss": "^4.3.3",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.5",
+    "@cloudflare/workers-types": "^5.20261028.1",
+    "@playwright/test": "^1.64.1",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@types/sanitize-html": "^2.16.0",
+    "drizzle-kit": "^0.31.11",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.5",
+    "wrangler": "^4.154.0"
+  }
+}

@@ -1,0 +1,225 @@
+---
+import { and, eq } from 'drizzle-orm';
+import {
+  House,
+  Users,
+  Briefcase,
+  CalendarDays,
+  Newspaper,
+  Heart,
+  UserRound,
+  Search,
+  ChevronRight,
+  MessageCircle,
+  BriefcaseBusiness,
+  UserPlus,
+} from '@lucide/astro';
+import BaseLayout from './BaseLayout.astro';
+import Logo from '../components/ui/Logo.astro';
+import AppearanceMenu from '../components/ui/AppearanceMenu.astro';
+import { getDb, pages } from '../server/db';
+import { mediaUrl } from '../server/storage/r2';
+import type { Settings } from '../server/settings';
+
+interface Props {
+  settings: Settings;
+  title?: string;
+  description?: string;
+  noindex?: boolean;
+  active?: string;
+  image?: string | null;
+  type?: 'website' | 'article' | 'profile' | 'event';
+  jsonLd?: Record<string, unknown> | Record<string, unknown>[];
+}
+
+const { settings, title, description, noindex, active = '', image, type, jsonLd } = Astro.props;
+const user = Astro.locals.user;
+const siteName = settings['site.name'];
+const logoUrl = mediaUrl(settings['site.logo_key']);
+
+const nav = [
+  { key: 'beranda', href: '/', label: 'Beranda', icon: House },
+  { key: 'direktori', href: '/direktori', label: 'Direktori', icon: Users },
+  { key: 'loker', href: '/loker', label: 'Loker', icon: Briefcase },
+  { key: 'berita', href: '/berita', label: 'Berita', icon: Newspaper },
+  { key: 'agenda', href: '/agenda', label: 'Agenda', icon: CalendarDays },
+  { key: 'donasi', href: '/donasi', label: 'Donasi', icon: Heart },
+];
+
+const moreLinks = [
+  { href: '/berita', label: 'Berita', icon: Newspaper },
+  { href: '/donasi', label: 'Donasi', icon: Heart },
+  { href: '/loker/pasang', label: 'Pasang loker', icon: BriefcaseBusiness },
+  { href: '/kontak', label: 'Kontak', icon: MessageCircle },
+];
+
+const tabs = [
+  { key: 'beranda', href: '/', label: 'Beranda', icon: House },
+  { key: 'direktori', href: '/direktori', label: 'Direktori', icon: Users },
+  { key: 'loker', href: '/loker', label: 'Loker', icon: Briefcase },
+  { key: 'agenda', href: '/agenda', label: 'Agenda', icon: CalendarDays },
+  user
+    ? { key: 'akun', href: '/akun', label: 'Akun', icon: UserRound }
+    : { key: 'masuk', href: '/masuk', label: 'Masuk', icon: UserRound },
+];
+
+const footerPages = await getDb()
+  .select({ slug: pages.slug, title: pages.title })
+  .from(pages)
+  .where(and(eq(pages.status, 'published'), eq(pages.showInFooter, true)))
+  .orderBy(pages.sortOrder);
+---
+
+<BaseLayout settings={settings} title={title} description={description} noindex={noindex} image={image} type={type} jsonLd={jsonLd}>
+  <div class="app-shell">
+    <nav class="sidebar" aria-label="Navigasi utama">
+      <div class="sidebar-brand">
+        <a href="/" aria-label={`${siteName} — beranda`}>
+          <Logo name={siteName} logoUrl={logoUrl} size={28} />
+        </a>
+      </div>
+
+      <div class="sidebar-group">Jelajahi</div>
+      {
+        nav.map((item) => (
+          <a class="sidebar-link" href={item.href} aria-current={active === item.key ? 'page' : undefined}>
+            <item.icon class="sidebar-icon" size={18} stroke-width={1.8} />
+            {item.label}
+          </a>
+        ))
+      }
+
+      <div class="sidebar-group">Lainnya</div>
+      <a class="sidebar-link" href="/loker/pasang" aria-current={active === 'pasang' ? 'page' : undefined}>
+        <BriefcaseBusiness class="sidebar-icon" size={18} stroke-width={1.8} />
+        Pasang loker
+      </a>
+      <a class="sidebar-link" href="/kontak" aria-current={active === 'kontak' ? 'page' : undefined}>
+        <MessageCircle class="sidebar-icon" size={18} stroke-width={1.8} />
+        Kontak
+      </a>
+
+      <div class="sidebar-footer">
+        {
+          user ? (
+            <a class="sidebar-link" href="/akun">
+              <UserRound class="sidebar-icon" size={18} stroke-width={1.8} />
+              {user.profile?.fullName ?? 'Akun saya'}
+            </a>
+          ) : (
+            <>
+              <a class="sidebar-link" href="/daftar">
+                <UserPlus class="sidebar-icon" size={18} stroke-width={1.8} />
+                Daftar alumni
+              </a>
+              <a class="sidebar-link" href="/masuk">
+                <UserRound class="sidebar-icon" size={18} stroke-width={1.8} />
+                Masuk
+              </a>
+            </>
+          )
+        }
+      </div>
+    </nav>
+
+    <div class="app-main">
+      <header class="toolbar">
+        <a class="show-tablet" href="/" aria-label={`${siteName} — beranda`}>
+          <Logo name={siteName} logoUrl={logoUrl} size={30} />
+        </a>
+
+        <form class="toolbar-search hide-mobile" method="get" action="/direktori" role="search">
+          <Search size={15} stroke-width={2} />
+          <input type="search" name="q" placeholder="Cari alumni" aria-label="Cari alumni" />
+        </form>
+
+        <div class="toolbar-group">
+          <a class="icon-btn show-tablet" href="/direktori" aria-label="Cari alumni">
+            <Search size={18} stroke-width={1.9} />
+          </a>
+          <AppearanceMenu />
+          {
+            user ? (
+              <a class="icon-btn" href="/akun" aria-label="Akun saya">
+                <UserRound size={18} stroke-width={1.9} />
+              </a>
+            ) : (
+              <a class="toolbar-cta" href="/masuk">Masuk</a>
+            )
+          }
+        </div>
+      </header>
+
+      <main id="konten">
+        <slot />
+      </main>
+
+      <footer class="footer">
+        <div class="public-container">
+          <nav class="footer-more show-tablet" aria-label="Menu lainnya">
+            <p class="footer-more-title">Lainnya</p>
+            <div class="list-group">
+              {
+                moreLinks.map((item) => (
+                  <a class="list-row footer-more-row" href={item.href}>
+                    <span class="footer-more-icon">
+                      <item.icon size={17} stroke-width={2} />
+                    </span>
+                    <span style="flex:1">{item.label}</span>
+                    <ChevronRight size={18} stroke-width={2} class="tertiary" />
+                  </a>
+                ))
+              }
+            </div>
+          </nav>
+
+          <div class="footer-fine">
+            <div class="footer-links">
+              {
+                footerPages.length > 0 ? (
+                  footerPages.map((page) => <a href={`/${page.slug}`}>{page.title}</a>)
+                ) : (
+                  <>
+                    <a href="/tentang">Tentang</a>
+                    <a href="/privasi">Kebijakan Privasi</a>
+                  </>
+                )
+              }
+              {settings['site.email'] && <a href={`mailto:${settings['site.email']}`}>{settings['site.email']}</a>}
+              {settings['site.instagram'] && <a href={settings['site.instagram']} rel="noopener" target="_blank">Instagram</a>}
+              {settings['site.linkedin'] && <a href={settings['site.linkedin']} rel="noopener" target="_blank">LinkedIn</a>}
+              {settings['site.facebook'] && <a href={settings['site.facebook']} rel="noopener" target="_blank">Facebook</a>}
+              {settings['site.youtube'] && <a href={settings['site.youtube']} rel="noopener" target="_blank">YouTube</a>}
+              {
+                settings['site.whatsapp'] && (
+                  <a href={`https://wa.me/${settings['site.whatsapp'].replace(/[^0-9]/g, '')}`} rel="noopener" target="_blank">
+                    WhatsApp
+                  </a>
+                )
+              }
+            </div>
+            <div class="footer-meta">
+              <span>© {new Date().getFullYear()} {siteName}</span>
+              <span>{settings['site.footer_note']}</span>
+            </div>
+          </div>
+        </div>
+      </footer>
+    </div>
+  </div>
+
+  <nav class="mobile-tabs" aria-label="Navigasi seluler">
+    {
+      tabs.map((item) => (
+        <a
+          class="mobile-tab"
+          href={item.href}
+          aria-current={active === item.key ? 'page' : undefined}
+        >
+          <item.icon size={24} stroke-width={1.75} />
+          {item.label}
+        </a>
+      ))
+    }
+  </nav>
+</BaseLayout>

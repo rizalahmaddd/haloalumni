@@ -1,0 +1,191 @@
+---
+import { and, asc, count, desc, eq, like, or, type SQL } from 'drizzle-orm';
+import { SearchX } from '@lucide/astro';
+import PublicLayout from '../../layouts/PublicLayout.astro';
+import SearchFilters from '../../components/public/SearchFilters.astro';
+import ProfileCard from '../../components/public/ProfileCard.astro';
+import Pagination from '../../components/ui/Pagination.astro';
+import EmptyState from '../../components/ui/EmptyState.astro';
+import { alumniProfiles, getDb, users } from '../../server/db';
+import { getSettings } from '../../server/settings';
+import { sanitizeSearchTerm } from '../../server/url';
+
+const settings = await getSettings();
+const db = getDb();
+const url = Astro.url;
+const q = (url.searchParams.get('q') ?? '').trim();
+const angkatan = (url.searchParams.get('angkatan') ?? '').trim();
+const program = (url.searchParams.get('program') ?? '').trim();
+const kota = (url.searchParams.get('kota') ?? '').trim();
+const industri = (url.searchParams.get('industri') ?? '').trim();
+const perusahaan = (url.searchParams.get('perusahaan') ?? '').trim();
+const sort = url.searchParams.get('sort') ?? 'terbaru';
+const page = Math.max(1, Math.min(40, Number.parseInt(url.searchParams.get('page') ?? '1', 10) || 1));
+const pageSize = 24;
+
+const conditions: SQL[] = [
+  eq(alumniProfiles.status, 'published'),
+  eq(alumniProfiles.directoryVisible, true),
+  eq(users.status, 'active'),
+];
+
+if (q) {
+  const term = `%${sanitizeSearchTerm(q)}%`;
+  conditions.push(
+    or(
+      like(alumniProfiles.fullName, term),
+      like(alumniProfiles.company, term),
+      like(alumniProfiles.program, term),
+    )!,
+  );
+}
+if (angkatan) {
+  const year = Number.parseInt(angkatan, 10);
+  if (Number.isFinite(year)) conditions.push(eq(alumniProfiles.angkatan, year));
+}
+if (program) conditions.push(eq(alumniProfiles.program, program));
+if (kota) conditions.push(eq(alumniProfiles.city, kota));
+if (industri) conditions.push(eq(alumniProfiles.industry, industri));
+if (perusahaan) conditions.push(like(alumniProfiles.company, `%${sanitizeSearchTerm(perusahaan)}%`));
+
+const where = and(...conditions);
+const order =
+  sort === 'nama'
+    ? asc(alumniProfiles.fullName)
+    : sort === 'angkatan'
+      ? desc(alumniProfiles.angkatan)
+      : desc(alumniProfiles.verifiedAt);
+
+const [rows, totalRows, years, programs, cities, industries] = await Promise.all([
+  db
+    .select({
+      slug: alumniProfiles.slug,
+      fullName: alumniProfiles.fullName,
+      angkatan: alumniProfiles.angkatan,
+      program: alumniProfiles.program,
+      photoKey: alumniProfiles.photoKey,
+      city: alumniProfiles.city,
+      company: alumniProfiles.company,
+      jobTitle: alumniProfiles.jobTitle,
+      industry: alumniProfiles.industry,
+      verifiedAt: alumniProfiles.verifiedAt,
+      showWorkplace: alumniProfiles.showWorkplace,
+    })
+    .from(alumniProfiles)
+    .innerJoin(users, eq(alumniProfiles.userId, users.id))
+    .where(where)
+    .orderBy(order)
+    .limit(pageSize)
+    .offset((page - 1) * pageSize),
+  db
+    .select({ value: count() })
+    .from(alumniProfiles)
+    .innerJoin(users, eq(alumniProfiles.userId, users.id))
+    .where(where),
+  db
+    .selectDistinct({ value: alumniProfiles.angkatan })
+    .from(alumniProfiles)
+    .where(eq(alumniProfiles.status, 'published'))
+    .orderBy(desc(alumniProfiles.angkatan))
+    .limit(60),
+  db
+    .selectDistinct({ value: alumniProfiles.program })
+    .from(alumniProfiles)
+    .where(and(eq(alumniProfiles.status, 'published'), eq(alumniProfiles.directoryVisible, true))),
+  db
+    .selectDistinct({ value: alumniProfiles.city })
+    .from(alumniProfiles)
+    .where(and(eq(alumniProfiles.status, 'published'), eq(alumniProfiles.directoryVisible, true))),
+  db
+    .selectDistinct({ value: alumniProfiles.industry })
+    .from(alumniProfiles)
+    .where(and(eq(alumniProfiles.status, 'published'), eq(alumniProfiles.directoryVisible, true))),
+]);
+
+const total = Number(totalRows[0]?.value ?? 0);
+const totalPages = Math.max(1, Math.ceil(total / pageSize));
+const yearLabel = settings['site.year_label'];
+
+const params = { q, angkatan, program, kota, industri, perusahaan, sort };
+---
+
+<PublicLayout
+  settings={settings}
+  active="direktori"
+  title="Direktori Alumni"
+  description="Telusuri direktori alumni berdasarkan angkatan, program, kota, dan industri."
+>
+  <div class="public-container" style="padding-top:2rem;padding-bottom:2rem">
+    <div class="section-head" style="align-items:flex-start">
+      <div>
+        <p class="eyebrow">Direktori</p>
+        <h1 class="page-title" style="margin-top:0.35rem">Temukan alumni</h1>
+        <p class="muted" style="margin:0.5rem 0 0;font-size:0.95rem">
+          {total} profil terverifikasi. Data kontak hanya terbuka untuk anggota yang sudah masuk.
+        </p>
+      </div>
+    </div>
+
+    <SearchFilters
+      action="/direktori"
+      values={params}
+      searchPlaceholder="Cari nama, program, atau perusahaan…"
+      fields={[
+        {
+          name: 'angkatan',
+          label: yearLabel,
+          type: 'select',
+          options: years.filter((row) => row.value != null).map((row) => ({ value: String(row.value), label: String(row.value) })),
+        },
+        {
+          name: 'program',
+          label: settings['site.program_label'],
+          type: 'select',
+          options: programs.filter((row) => row.value).map((row) => ({ value: row.value as string, label: row.value as string })),
+        },
+        {
+          name: 'kota',
+          label: 'Kota',
+          type: 'select',
+          options: cities.filter((row) => row.value).map((row) => ({ value: row.value as string, label: row.value as string })),
+        },
+        {
+          name: 'industri',
+          label: 'Industri',
+          type: 'select',
+          options: industries.filter((row) => row.value).map((row) => ({ value: row.value as string, label: row.value as string })),
+        },
+        { name: 'perusahaan', label: 'Perusahaan', placeholder: 'Nama perusahaan' },
+        {
+          name: 'sort',
+          label: 'Urutkan',
+          type: 'select',
+          options: [
+            { value: 'terbaru', label: 'Terbaru' },
+            { value: 'nama', label: 'Nama A–Z' },
+            { value: 'angkatan', label: `${yearLabel} terbaru` },
+          ],
+        },
+      ]}
+    />
+
+    {
+      rows.length > 0 ? (
+        <div class="grid-auto">
+          {rows.map((profile) => (
+            <ProfileCard profile={profile} yearLabel={yearLabel} />
+          ))}
+        </div>
+      ) : (
+        <EmptyState
+          title="Tidak ada alumni yang cocok"
+          description="Coba kata kunci lain atau hapus beberapa filter."
+        >
+          <SearchX size={26} stroke-width={1.6} style="color:var(--text-tertiary)" />
+        </EmptyState>
+      )
+    }
+
+    <Pagination page={page} totalPages={totalPages} basePath="/direktori" params={params} />
+  </div>
+</PublicLayout>

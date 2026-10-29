@@ -1,0 +1,163 @@
+---
+import {
+  LayoutDashboard,
+  Users,
+  Briefcase,
+  Heart,
+  Newspaper,
+  CalendarDays,
+  FileText,
+  Image as ImageIcon,
+  Mail,
+  Shield,
+  Settings as SettingsIcon,
+  ScrollText,
+  LogOut,
+  House,
+} from '@lucide/astro';
+import BaseLayout from './BaseLayout.astro';
+import Logo from '../components/ui/Logo.astro';
+import AppearanceMenu from '../components/ui/AppearanceMenu.astro';
+import { mediaUrl } from '../server/storage/r2';
+import type { Settings } from '../server/settings';
+
+interface Props {
+  settings: Settings;
+  title: string;
+}
+
+const { settings, title } = Astro.props;
+const user = Astro.locals.user!;
+const siteName = settings['site.name'];
+const logoUrl = mediaUrl(settings['site.logo_key']);
+const pathname = Astro.url.pathname;
+
+const groups = [
+  {
+    label: 'Ringkasan',
+    items: [{ href: '/admin', label: 'Dashboard', icon: LayoutDashboard }],
+  },
+  {
+    label: 'Moderasi',
+    items: [
+      { href: '/admin/alumni', label: 'Alumni', icon: Users },
+      { href: '/admin/loker', label: 'Loker', icon: Briefcase },
+      { href: '/admin/donasi', label: 'Donasi', icon: Heart },
+    ],
+  },
+  {
+    label: 'Konten',
+    items: [
+      { href: '/admin/berita', label: 'Berita', icon: Newspaper },
+      { href: '/admin/agenda', label: 'Agenda', icon: CalendarDays },
+      { href: '/admin/halaman', label: 'Halaman', icon: FileText },
+    ],
+  },
+  {
+    label: 'Aset & interaksi',
+    items: [
+      { href: '/admin/media', label: 'Media', icon: ImageIcon },
+      { href: '/admin/pesan', label: 'Pesan', icon: Mail },
+    ],
+  },
+  {
+    label: 'Sistem',
+    items: [
+      { href: '/admin/pengguna', label: 'Pengguna', icon: Shield },
+      { href: '/admin/pengaturan', label: 'Pengaturan', icon: SettingsIcon },
+      { href: '/admin/audit', label: 'Audit log', icon: ScrollText },
+    ],
+  },
+];
+
+const allItems = groups.flatMap((group) => group.items);
+const isActive = (href: string) =>
+  href === '/admin' ? pathname === '/admin' : pathname === href || pathname.startsWith(`${href}/`);
+---
+
+<BaseLayout settings={settings} title={title} noindex>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <a href="/admin" aria-label="Dashboard CMS">
+          <Logo name={siteName} logoUrl={logoUrl} size={28} />
+        </a>
+      </div>
+
+      {
+        groups.map((group) => (
+          <>
+            <div class="sidebar-group">{group.label}</div>
+            {group.items.map((item) => (
+              <a class="sidebar-link" href={item.href} aria-current={isActive(item.href) ? 'page' : undefined}>
+                <item.icon class="sidebar-icon" size={18} stroke-width={1.8} />
+                {item.label}
+              </a>
+            ))}
+          </>
+        ))
+      }
+
+      <div class="sidebar-footer">
+        <a class="sidebar-link" href="/">
+          <House class="sidebar-icon" size={18} stroke-width={1.8} />
+          Lihat situs
+        </a>
+        <form method="post" action="/auth/keluar">
+          <button
+            class="sidebar-link"
+            type="submit"
+            style="width:100%;border:0;background:transparent;cursor:pointer;text-align:left"
+          >
+            <LogOut class="sidebar-icon" size={18} stroke-width={1.8} />
+            Keluar
+          </button>
+        </form>
+      </div>
+    </aside>
+
+    <div class="app-main">
+      <div class="toolbar">
+        <div class="row" style="gap:0.5rem;min-width:0">
+          <a class="show-tablet" href="/admin" aria-label="Dashboard CMS">
+            <Logo name={siteName} logoUrl={logoUrl} size={26} markOnly />
+          </a>
+          <span class="toolbar-title">{title}</span>
+        </div>
+        <div class="row" style="gap:0.5rem">
+          <span class="badge badge-accent hide-mobile">{user.role === 'admin' ? 'Admin' : 'Editor'}</span>
+          <div class="toolbar-group">
+            <AppearanceMenu />
+            <a class="icon-btn" href="/" aria-label="Lihat situs">
+              <House size={18} stroke-width={1.9} />
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <nav class="section-tabs" aria-label="Menu CMS">
+        {
+          allItems.map((item) => (
+            <a class="section-tab" href={item.href} aria-current={isActive(item.href) ? 'page' : undefined}>
+              {item.label}
+            </a>
+          ))
+        }
+      </nav>
+
+      <main class="page-content" style="max-width:1180px" id="konten">
+        <slot />
+      </main>
+    </div>
+  </div>
+</BaseLayout>
+
+<script>
+  const scrollActiveTab = () => {
+    const active = document.querySelector<HTMLElement>('.section-tabs [aria-current="page"]');
+    const strip = active?.parentElement;
+    if (!active || !strip) return;
+    strip.scrollLeft = active.offsetLeft - strip.clientWidth / 2 + active.clientWidth / 2;
+  };
+  scrollActiveTab();
+</script>

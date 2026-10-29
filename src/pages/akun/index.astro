@@ -1,0 +1,150 @@
+---
+import { and, count, eq, sql } from 'drizzle-orm';
+import {
+  ArrowRight,
+  Bookmark,
+  Briefcase,
+  CalendarDays,
+  CircleAlert,
+  Heart,
+  QrCode,
+  UserRound,
+} from '@lucide/astro';
+import AccountLayout from '../../layouts/AccountLayout.astro';
+import Avatar from '../../components/ui/Avatar.astro';
+import Badge from '../../components/ui/Badge.astro';
+import { alumniProfiles, donations, eventRegistrations, getDb, jobBookmarks, jobs } from '../../server/db';
+import { getSettings } from '../../server/settings';
+import { formatRupiah } from '../../server/util';
+
+const settings = await getSettings();
+const user = Astro.locals.user!;
+const db = getDb();
+
+const [profile, bookmarkRows, registrationRows, donationRows, jobRows] = await Promise.all([
+  db.select().from(alumniProfiles).where(eq(alumniProfiles.userId, user.id)).limit(1),
+  db.select({ value: count() }).from(jobBookmarks).where(eq(jobBookmarks.userId, user.id)),
+  db
+    .select({ value: count() })
+    .from(eventRegistrations)
+    .where(and(eq(eventRegistrations.userId, user.id), eq(eventRegistrations.status, 'registered'))),
+  db
+    .select({ value: sql<number>`coalesce(sum(${donations.amount}), 0)` })
+    .from(donations)
+    .where(and(eq(donations.donorUserId, user.id), eq(donations.status, 'verified'))),
+  db.select({ value: count() }).from(jobs).where(eq(jobs.submittedByUserId, user.id)),
+]);
+
+const myProfile = profile[0] ?? null;
+const pending = user.status === 'pending';
+const completeness = myProfile
+  ? [
+      myProfile.fullName,
+      myProfile.angkatan,
+      myProfile.program,
+      myProfile.nim,
+      myProfile.city,
+      myProfile.company,
+      myProfile.jobTitle,
+      myProfile.photoKey,
+      myProfile.bio,
+    ].filter(Boolean).length
+  : 0;
+const completePercent = Math.round((completeness / 9) * 100);
+const firstName = (myProfile?.fullName ?? user.email).split(' ')[0];
+
+const stats = [
+  { label: 'Loker disimpan', value: Number(bookmarkRows[0]?.value ?? 0), href: '/akun/loker', icon: Bookmark },
+  { label: 'Agenda diikuti', value: Number(registrationRows[0]?.value ?? 0), href: '/akun/agenda', icon: CalendarDays },
+  { label: 'Total donasi', value: formatRupiah(Number(donationRows[0]?.value ?? 0)), href: '/akun/donasi', icon: Heart },
+  { label: 'Loker dikirim', value: Number(jobRows[0]?.value ?? 0), href: '/akun/loker', icon: Briefcase },
+];
+---
+
+<AccountLayout settings={settings} title="Ringkasan" active="ringkasan">
+  <div class="spread wrap" style="gap:1rem;margin-bottom:1.5rem">
+    <div class="row" style="gap:0.9rem;align-items:center">
+      <Avatar src={myProfile?.photoKey} name={myProfile?.fullName ?? user.email} size="lg" />
+      <div>
+        <h1 class="section-title" style="font-size:1.5rem">Halo, {firstName}</h1>
+        <p class="muted" style="margin:0.2rem 0 0;font-size:0.88rem">
+          {myProfile ? `${settings['site.year_label']} ${myProfile.angkatan}${myProfile.program ? ` · ${myProfile.program}` : ''}` : 'Lengkapi profil alumni Anda'}
+        </p>
+      </div>
+    </div>
+    <a class="btn btn-secondary btn-sm" href="/akun/profil">
+      <UserRound size={15} stroke-width={1.9} /> Edit profil
+    </a>
+  </div>
+
+  {pending && (
+    <div class="alert alert-info" role="status" style="display:flex;gap:0.5rem;align-items:flex-start;margin-bottom:1.25rem">
+      <CircleAlert size={17} stroke-width={2} style="flex:none;margin-top:2px" />
+      <div>
+        <strong>Akun menunggu verifikasi admin.</strong>
+        <p style="margin:0.2rem 0 0;font-size:0.85rem">
+          Anda tetap dapat melengkapi profil, tetapi kartu alumni dan fitur anggota aktif setelah disetujui.
+        </p>
+      </div>
+    </div>
+  )}
+
+  <div class="grid-auto" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-bottom:1.5rem">
+    {
+      stats.map((stat) => (
+        <a class="stat-tile" href={stat.href}>
+          <div class="row" style="gap:0.4rem;color:var(--text-tertiary)">
+            <stat.icon size={15} stroke-width={1.9} />
+            <span style="font-size:0.76rem;font-weight:600">{stat.label}</span>
+          </div>
+          <div class="stat-value">{stat.value}</div>
+        </a>
+      ))
+    }
+  </div>
+
+  <div class="grid-2">
+    <section class="solid-panel" style="padding:1.35rem">
+      <div class="spread">
+        <h2 class="section-title" style="font-size:1.05rem">Kelengkapan profil</h2>
+        <Badge variant={completePercent >= 70 ? 'success' : 'warning'}>{completePercent}%</Badge>
+      </div>
+      <div class="progress" style="margin-top:0.75rem">
+        <span style={`width:${completePercent}%`}></span>
+      </div>
+      <p class="muted" style="font-size:0.85rem;margin:0.7rem 0 0;line-height:1.6">
+        Profil lengkap membantu alumni lain menemukan dan menghubungi Anda. Atur visibilitas setiap data di
+        halaman profil.
+      </p>
+      <a class="btn btn-secondary btn-sm" href="/akun/profil" style="margin-top:0.9rem">
+        Lengkapi profil <ArrowRight size={14} stroke-width={2} />
+      </a>
+    </section>
+
+    <section class="glass-panel" style="padding:1.35rem">
+      <div class="row" style="gap:0.5rem">
+        <QrCode size={18} stroke-width={1.9} style="color:var(--accent)" />
+        <h2 class="section-title" style="font-size:1.05rem">Kartu alumni</h2>
+      </div>
+      {myProfile?.cardNo ? (
+        <>
+          <p class="muted" style="font-size:0.85rem;margin:0.5rem 0 0">
+            Kartu digital Anda sudah aktif dengan nomor <strong>{myProfile.cardNo}</strong>.
+          </p>
+          <a class="btn btn-primary btn-sm" href="/akun/kartu" style="margin-top:0.9rem">
+            Buka kartu <ArrowRight size={14} stroke-width={2} />
+          </a>
+        </>
+      ) : (
+        <>
+          <p class="muted" style="font-size:0.85rem;margin:0.5rem 0 0;line-height:1.6">
+            Kartu alumni diterbitkan otomatis setelah admin menyetujui keanggotaan Anda.
+          </p>
+          <a class="btn btn-secondary btn-sm" href="/akun/profil" style="margin-top:0.9rem">
+            Periksa profil
+          </a>
+        </>
+      )}
+    </section>
+  </div>
+</AccountLayout>

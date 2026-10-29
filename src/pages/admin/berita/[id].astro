@@ -1,0 +1,116 @@
+---
+import { actions } from 'astro:actions';
+import { eq } from 'drizzle-orm';
+import { ArrowLeft, Save, Trash2 } from '@lucide/astro';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import MarkdownEditor from '../../../components/admin/MarkdownEditor';
+import MediaPicker from '../../../components/admin/MediaPicker';
+import Badge from '../../../components/ui/Badge.astro';
+import { getDb, posts } from '../../../server/db';
+import { getSettings } from '../../../server/settings';
+import { toDateTimeLocal } from '../../../server/format';
+
+const { id } = Astro.params;
+const settings = await getSettings();
+const isNew = id === 'baru';
+const [post] = isNew
+  ? [null]
+  : await getDb()
+      .select()
+      .from(posts)
+      .where(eq(posts.id, id ?? ''))
+      .limit(1);
+
+if (!isNew && !post) Astro.response.status = 404;
+const error = Astro.url.searchParams.get('error');
+const sukses = Astro.url.searchParams.get('sukses');
+---
+
+<AdminLayout settings={settings} title={isNew ? 'Tulis berita' : 'Edit berita'}>
+  <a class="btn btn-ghost btn-sm" href="/admin/berita" style="margin-bottom:1rem">
+    <ArrowLeft size={15} stroke-width={2} /> Berita
+  </a>
+
+  <div class="spread wrap" style="margin-bottom:1.25rem">
+    <h1 class="section-title">{isNew ? 'Tulis berita' : post?.title}</h1>
+    {post && <Badge variant={post.status === 'published' ? 'success' : 'default'}>{post.status}</Badge>}
+  </div>
+
+  {error && <div class="alert alert-error" role="alert" style="margin-bottom:1rem">{error}</div>}
+  {sukses && <div class="alert alert-success" role="status" style="margin-bottom:1rem">{sukses}</div>}
+
+  {
+    !isNew && !post ? (
+      <div class="alert alert-error" role="alert">Berita tidak ditemukan.</div>
+    ) : (
+      <form method="POST" action={actions.admin.savePost} class="stack" style="gap:1.25rem">
+        {post && <input type="hidden" name="id" value={post.id} />}
+
+        <section class="solid-panel" style="padding:1.35rem">
+          <div class="grid-2" style="gap:0.75rem">
+            <div class="field" style="grid-column:1 / -1">
+              <label class="label" for="title">Judul</label>
+              <input class="input" id="title" name="title" required value={post?.title ?? ''} />
+            </div>
+            <div class="field">
+              <label class="label" for="slug">Slug</label>
+              <input class="input" id="slug" name="slug" value={post?.slug ?? ''} placeholder="otomatis dari judul" />
+            </div>
+            <div class="field">
+              <label class="label" for="category">Kategori</label>
+              <input class="input" id="category" name="category" value={post?.category ?? ''} placeholder="Berita, Program…" />
+            </div>
+            <div class="field" style="grid-column:1 / -1">
+              <label class="label" for="excerpt">Ringkasan</label>
+              <textarea class="textarea" id="excerpt" name="excerpt" rows="2" maxlength="400">{post?.excerpt ?? ''}</textarea>
+            </div>
+            <div class="field">
+              <label class="label" for="status">Status</label>
+              <select class="select" id="status" name="status">
+                <option value="draft" selected={post?.status === 'draft'}>Draft</option>
+                <option value="published" selected={post?.status === 'published'}>Terbit</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="label" for="publishedAt">Waktu terbit</label>
+              <input
+                class="input"
+                id="publishedAt"
+                name="publishedAt"
+                type="datetime-local"
+                value={toDateTimeLocal(post?.publishedAt)}
+              />
+            </div>
+          </div>
+          <div style="margin-top:0.9rem">
+            <MediaPicker name="coverKey" label="Gambar sampul" initialKey={post?.coverKey ?? ''} folder="posts" client:idle />
+          </div>
+        </section>
+
+        <section class="solid-panel" style="padding:1.35rem">
+          <h2 class="section-title" style="font-size:1rem">Isi berita</h2>
+          <div style="margin-top:0.9rem">
+            <MarkdownEditor name="contentMd" initialValue={post?.contentMd ?? ''} client:idle />
+          </div>
+        </section>
+
+        <div class="row wrap">
+          <button class="btn btn-primary" type="submit">
+            <Save size={16} stroke-width={1.9} /> Simpan berita
+          </button>
+          {post && (
+            <button
+              class="btn btn-danger"
+              type="submit"
+              formaction={actions.admin.deletePost}
+              formnovalidate
+              onclick="return confirm('Hapus berita ini?')"
+            >
+              <Trash2 size={16} stroke-width={1.8} /> Hapus
+            </button>
+          )}
+        </div>
+      </form>
+    )
+  }
+</AdminLayout>

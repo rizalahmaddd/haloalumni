@@ -1,0 +1,10 @@
+---
+interface Props {
+  variant?: 'default' | 'accent' | 'success' | 'warning' | 'danger' | 'info';
+}
+
+const { variant = 'default' } = Astro.props;
+const className = variant === 'default' ? 'badge' : `badge badge-${variant}`;
+---
+
+<span class={className}><slot /></span>

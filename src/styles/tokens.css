@@ -1,0 +1,157 @@
+:root {
+  --radius-window: 26px;
+  --radius-panel: 22px;
+  --radius-card: 18px;
+  --radius-control: 10px;
+  --radius-pill: 999px;
+
+  --glass-blur-thin: 16px;
+  --glass-blur: 28px;
+  --glass-blur-thick: 40px;
+  --glass-sat: 180%;
+  --glass-tint: 0.68;
+
+  --accent: #0071e3;
+  --accent-strong: color-mix(in srgb, var(--accent) 82%, black);
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
+  --accent-contrast: #ffffff;
+
+  --bg: #f2f2f7;
+  --bg-elevated: #f7f7f9;
+  --surface-solid: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-glass: rgba(255, 255, 255, var(--glass-tint));
+  --surface-input: rgba(118, 118, 128, 0.1);
+  --fill: rgba(118, 118, 128, 0.12);
+  --fill-strong: rgba(118, 118, 128, 0.2);
+
+  --text-primary: #000000;
+  --text-secondary: #55555c;
+  --text-tertiary: #6c6c72;
+  --text-on-accent: #ffffff;
+  --on-danger: #ffffff;
+
+  --border-glass: rgba(255, 255, 255, 0.7);
+  --stroke: rgba(60, 60, 67, 0.13);
+  --stroke-strong: rgba(60, 60, 67, 0.24);
+
+  --success: #128a4b;
+  --success-soft: rgba(18, 138, 75, 0.12);
+  --warning: #a35a00;
+  --warning-soft: rgba(214, 128, 0, 0.14);
+  --danger: #c02626;
+  --danger-soft: rgba(192, 38, 38, 0.12);
+  --info: #0a6cb4;
+  --info-soft: rgba(10, 108, 180, 0.12);
+
+  --shadow-glass: 0 0 0 0.5px rgba(0, 0, 0, 0.06), 0 8px 28px -10px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  --shadow-card: 0 0 0 0.5px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-raised: 0 0 0 0.5px rgba(0, 0, 0, 0.06), 0 10px 26px -14px rgba(0, 0, 0, 0.26);
+  --shadow-pop: 0 24px 60px -20px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.08);
+
+  --ease-apple: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur-fast: 120ms;
+  --dur: 200ms;
+  --dur-slow: 320ms;
+
+  --sidebar-width: 240px;
+  --toolbar-height: 52px;
+  --content-max: 1200px;
+}
+
+:root[data-theme='dark'] {
+  --on-danger: #2b0b0b;
+  --bg: #000000;
+  --bg-elevated: #111113;
+  --surface-solid: #1c1c1e;
+  --surface-raised: #1c1c1e;
+  --surface-glass: rgba(30, 30, 32, var(--glass-tint));
+  --surface-input: rgba(118, 118, 128, 0.24);
+  --fill: rgba(118, 118, 128, 0.24);
+  --fill-strong: rgba(118, 118, 128, 0.36);
+
+  --text-primary: #f5f5f7;
+  --text-secondary: #c2c2c8;
+  --text-tertiary: #98989f;
+
+  --border-glass: rgba(255, 255, 255, 0.14);
+  --stroke: rgba(255, 255, 255, 0.1);
+  --stroke-strong: rgba(255, 255, 255, 0.2);
+
+  --success: #4ade80;
+  --success-soft: rgba(74, 222, 128, 0.14);
+  --warning: #fbbf24;
+  --warning-soft: rgba(251, 191, 36, 0.14);
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.16);
+  --info: #60a5fa;
+  --info-soft: rgba(96, 165, 250, 0.16);
+
+  --shadow-glass: 0 1px 1px rgba(0, 0, 0, 0.3), 0 18px 40px -18px rgba(0, 0, 0, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --shadow-card: 0 0 0 0.5px rgba(255, 255, 255, 0.08);
+  --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 28px -16px rgba(0, 0, 0, 0.8);
+  --shadow-pop: 0 30px 70px -24px rgba(0, 0, 0, 0.85), 0 2px 10px rgba(0, 0, 0, 0.4);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #000000;
+    --bg-elevated: #111113;
+    --surface-solid: #1c1c1e;
+    --surface-raised: #1c1c1e;
+    --surface-glass: rgba(30, 30, 32, var(--glass-tint));
+    --surface-input: rgba(118, 118, 128, 0.24);
+    --fill: rgba(118, 118, 128, 0.24);
+    --fill-strong: rgba(118, 118, 128, 0.36);
+
+    --text-primary: #f5f5f7;
+    --text-secondary: #c2c2c8;
+    --text-tertiary: #98989f;
+
+    --border-glass: rgba(255, 255, 255, 0.14);
+    --stroke: rgba(255, 255, 255, 0.1);
+    --stroke-strong: rgba(255, 255, 255, 0.2);
+
+    --success: #4ade80;
+    --success-soft: rgba(74, 222, 128, 0.14);
+    --warning: #fbbf24;
+    --warning-soft: rgba(251, 191, 36, 0.14);
+    --danger: #f87171;
+    --on-danger: #2b0b0b;
+    --danger-soft: rgba(248, 113, 113, 0.16);
+    --info: #60a5fa;
+    --info-soft: rgba(96, 165, 250, 0.16);
+
+    --shadow-glass: 0 1px 1px rgba(0, 0, 0, 0.3), 0 18px 40px -18px rgba(0, 0, 0, 0.7),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    --shadow-card: 0 0 0 0.5px rgba(255, 255, 255, 0.08);
+    --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 28px -16px rgba(0, 0, 0, 0.8);
+    --shadow-pop: 0 30px 70px -24px rgba(0, 0, 0, 0.85), 0 2px 10px rgba(0, 0, 0, 0.4);
+  }
+}
+
+:root[data-reduced-transparency='true'] {
+  --glass-blur-thin: 0px;
+  --glass-blur: 0px;
+  --glass-blur-thick: 0px;
+  --glass-tint: 0.99;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --glass-blur-thin: 0px;
+    --glass-blur: 0px;
+    --glass-blur-thick: 0px;
+    --glass-tint: 0.99;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --stroke: rgba(0, 0, 0, 0.28);
+    --border-glass: rgba(255, 255, 255, 0.95);
+  }
+}

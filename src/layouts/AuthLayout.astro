@@ -1,0 +1,64 @@
+---
+import BaseLayout from './BaseLayout.astro';
+import Logo from '../components/ui/Logo.astro';
+import AppearanceMenu from '../components/ui/AppearanceMenu.astro';
+import { mediaUrl } from '../server/storage/r2';
+import type { Settings } from '../server/settings';
+
+interface Props {
+  settings: Settings;
+  title: string;
+  heading: string;
+  subheading?: string;
+}
+
+const { settings, title, heading, subheading } = Astro.props;
+const siteName = settings['site.name'];
+const logoUrl = mediaUrl(settings['site.logo_key']);
+---
+
+<BaseLayout settings={settings} title={title} noindex>
+  <div class="auth-shell">
+    <aside class="auth-aside">
+      <Logo name={siteName} logoUrl={logoUrl} size={34} />
+      <div style="position:relative;z-index:1;max-width:40ch">
+        <p style="font-size:0.72rem;letter-spacing:0.16em;text-transform:uppercase;color:rgba(255,255,255,0.6);margin:0 0 0.75rem">
+          Jaringan alumni
+        </p>
+        <p style="font-size:clamp(1.6rem,1.2rem + 1.6vw,2.4rem);line-height:1.15;letter-spacing:-0.03em;font-weight:650;margin:0">
+          {settings['site.tagline']}
+        </p>
+        <p style="margin:1rem 0 0;color:rgba(255,255,255,0.72);font-size:0.95rem;line-height:1.6">
+          Direktori alumni, peluang karier, agenda reuni, dan kartu anggota digital — dalam satu tempat.
+        </p>
+      </div>
+      <p style="position:relative;z-index:1;font-size:0.78rem;color:rgba(255,255,255,0.55);margin:0">
+        {siteName}
+      </p>
+    </aside>
+
+    <main class="auth-main" id="konten">
+      <div class="auth-card">
+        <div class="spread" style="margin-bottom:1.5rem">
+          <a href="/" class="show-mobile">
+            <Logo name={siteName} logoUrl={logoUrl} size={28} />
+          </a>
+          <div style="margin-left:auto">
+            <AppearanceMenu />
+          </div>
+        </div>
+
+        <h1 class="section-title" style="font-size:1.65rem">{heading}</h1>
+        {subheading && <p class="muted" style="margin:0.4rem 0 0;font-size:0.92rem">{subheading}</p>}
+
+        <div style="margin-top:1.5rem">
+          <slot />
+        </div>
+
+        <p class="tertiary" style="font-size:0.78rem;margin-top:1.75rem">
+          Dengan melanjutkan, Anda menyetujui <a href="/privasi" style="color:var(--accent)">kebijakan privasi</a>.
+        </p>
+      </div>
+    </main>
+  </div>
+</BaseLayout>

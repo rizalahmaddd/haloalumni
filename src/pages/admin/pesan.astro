@@ -1,0 +1,115 @@
+---
+import { actions } from 'astro:actions';
+import { and, desc, eq, isNull, type SQL } from 'drizzle-orm';
+import { Mail, MailOpen } from '@lucide/astro';
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Badge from '../../components/ui/Badge.astro';
+import EmptyState from '../../components/ui/EmptyState.astro';
+import { contactMessages, getDb } from '../../server/db';
+import { getSettings } from '../../server/settings';
+import { formatDateTime } from '../../server/format';
+
+const settings = await getSettings();
+const status = (Astro.url.searchParams.get('status') ?? 'semua').trim();
+const isAdminViewer = Astro.locals.user?.role === 'admin';
+const conditions: SQL[] = [];
+// Alumni-to-alumni relays are private; editors only handle secretariat mail.
+if (!isAdminViewer) conditions.push(isNull(contactMessages.toUserId));
+if (['new', 'read', 'replied', 'spam'].includes(status)) {
+  conditions.push(eq(contactMessages.status, status as 'new' | 'read' | 'replied' | 'spam'));
+}
+
+const rows = await getDb()
+  .select()
+  .from(contactMessages)
+  .where(conditions.length ? and(...conditions) : undefined)
+  .orderBy(desc(contactMessages.createdAt))
+  .limit(100);
+
+const sukses = Astro.url.searchParams.get('sukses');
+const error = Astro.url.searchParams.get('error');
+const tabs = [
+  { value: 'semua', label: 'Semua' },
+  { value: 'new', label: 'Baru' },
+  { value: 'read', label: 'Dibaca' },
+  { value: 'replied', label: 'Dibalas' },
+  { value: 'spam', label: 'Spam' },
+];
+const statusLabel: Record<string, string> = {
+  new: 'Baru',
+  read: 'Dibaca',
+  replied: 'Dibalas',
+  spam: 'Spam',
+};
+---
+
+<AdminLayout settings={settings} title="Pesan">
+  <div style="margin-bottom:1.25rem">
+    <h1 class="section-title">Pesan kontak</h1>
+    <p class="muted" style="margin:0.3rem 0 0;font-size:0.88rem">
+      Pesan dari form kontak dan relay profil alumni.
+    </p>
+  </div>
+
+  {error && <div class="alert alert-error" role="alert" style="margin-bottom:1rem">{error}</div>}
+  {sukses && <div class="alert alert-success" role="status" style="margin-bottom:1rem">{sukses}</div>}
+
+  <div class="row wrap" style="gap:0.35rem;margin-bottom:1rem">
+    {
+      tabs.map((tab) => (
+        <a
+          class="chip"
+          href={`/admin/pesan${tab.value === 'semua' ? '' : `?status=${tab.value}`}`}
+          aria-current={status === tab.value ? 'page' : undefined}
+        >
+          {tab.label}
+        </a>
+      ))
+    }
+  </div>
+
+  {
+    rows.length > 0 ? (
+      <div class="stack" style="gap:0.75rem">
+        {rows.map((message) => (
+          <article class="solid-panel" style="padding:1rem 1.15rem">
+            <div class="spread wrap" style="gap:0.5rem">
+              <div class="row" style="gap:0.5rem">
+                {message.status === 'new' ? <Mail size={16} stroke-width={1.8} style="color:var(--accent)" /> : <MailOpen size={16} stroke-width={1.8} />}
+                <strong style="font-size:0.9rem">{message.subject ?? '(tanpa subjek)'}</strong>
+                <Badge variant={message.status === 'new' ? 'accent' : message.status === 'spam' ? 'danger' : 'default'}>
+                  {statusLabel[message.status]}
+                </Badge>
+              </div>
+              <span class="tertiary" style="font-size:0.75rem">{formatDateTime(message.createdAt)}</span>
+            </div>
+
+            <p class="tertiary" style="font-size:0.78rem;margin:0.35rem 0 0">
+              {message.name} · {message.email}{message.toUserId ? ' · relay alumni' : ' · sekretariat'}
+            </p>
+            <p class="muted" style="font-size:0.87rem;margin:0.5rem 0 0;white-space:pre-wrap;line-height:1.6">
+              {message.message}
+            </p>
+
+            <div class="row wrap" style="gap:0.4rem;margin-top:0.75rem">
+              <a class="btn btn-secondary btn-sm" href={`mailto:${message.email}?subject=Re: ${encodeURIComponent(message.subject ?? 'Pesan alumni')}`}>
+                Balas email
+              </a>
+              {['read', 'replied', 'spam'].filter((value) => value !== message.status).map((value) => (
+                <form method="POST" action={actions.admin.updateMessageStatus}>
+                  <input type="hidden" name="id" value={message.id} />
+                  <input type="hidden" name="status" value={value} />
+                  <button class="btn btn-ghost btn-sm" type="submit">
+                    Tandai {statusLabel[value].toLowerCase()}
+                  </button>
+                </form>
+              ))}
+            </div>
+          </article>
+        ))}
+      </div>
+    ) : (
+      <EmptyState title="Tidak ada pesan" description="Pesan dari pengunjung akan tampil di sini." />
+    )
+  }
+</AdminLayout>

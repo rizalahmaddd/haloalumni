@@ -1,0 +1,141 @@
+---
+import {
+  LayoutDashboard,
+  UserRound,
+  QrCode,
+  Briefcase,
+  CalendarDays,
+  Heart,
+  LogOut,
+  House,
+  Users,
+} from '@lucide/astro';
+import BaseLayout from './BaseLayout.astro';
+import Logo from '../components/ui/Logo.astro';
+import AppearanceMenu from '../components/ui/AppearanceMenu.astro';
+import { mediaUrl } from '../server/storage/r2';
+import type { Settings } from '../server/settings';
+
+interface Props {
+  settings: Settings;
+  title: string;
+  active: string;
+  printCard?: boolean;
+}
+
+const { settings, title, active, printCard = false } = Astro.props;
+const user = Astro.locals.user!;
+const siteName = settings['site.name'];
+const logoUrl = mediaUrl(settings['site.logo_key']);
+
+const nav = [
+  { key: 'ringkasan', href: '/akun', label: 'Ringkasan', icon: LayoutDashboard },
+  { key: 'profil', href: '/akun/profil', label: 'Profil', icon: UserRound },
+  { key: 'kartu', href: '/akun/kartu', label: 'Kartu alumni', icon: QrCode },
+  { key: 'loker', href: '/akun/loker', label: 'Loker saya', icon: Briefcase },
+  { key: 'agenda', href: '/akun/agenda', label: 'Agenda saya', icon: CalendarDays },
+  { key: 'donasi', href: '/akun/donasi', label: 'Donasi saya', icon: Heart },
+];
+
+const tabs = [
+  { key: 'beranda', href: '/', label: 'Beranda', icon: House },
+  { key: 'direktori', href: '/direktori', label: 'Direktori', icon: Users },
+  { key: 'loker', href: '/loker', label: 'Loker', icon: Briefcase },
+  { key: 'agenda', href: '/agenda', label: 'Agenda', icon: CalendarDays },
+  { key: 'akun', href: '/akun', label: 'Akun', icon: UserRound },
+];
+---
+
+<BaseLayout settings={settings} title={title} noindex bodyClass={printCard ? 'print-card' : undefined}>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <a href="/" aria-label={`${siteName} — beranda`}>
+          <Logo name={siteName} logoUrl={logoUrl} size={28} />
+        </a>
+      </div>
+
+      <div class="sidebar-group">Akun saya</div>
+      {
+        nav.map((item) => (
+          <a
+            class="sidebar-link"
+            href={item.href}
+            aria-current={active === item.key ? 'page' : undefined}
+          >
+            <item.icon class="sidebar-icon" size={18} stroke-width={1.8} />
+            {item.label}
+          </a>
+        ))
+      }
+
+      <div class="sidebar-footer">
+        <a class="sidebar-link" href="/">
+          <House class="sidebar-icon" size={18} stroke-width={1.8} />
+          Lihat situs
+        </a>
+        <form method="post" action="/auth/keluar">
+          <button
+            class="sidebar-link"
+            type="submit"
+            style="width:100%;border:0;background:transparent;cursor:pointer;text-align:left"
+          >
+            <LogOut class="sidebar-icon" size={18} stroke-width={1.8} />
+            Keluar
+          </button>
+        </form>
+      </div>
+    </aside>
+
+    <div class="app-main">
+      <div class="toolbar">
+        <div class="row" style="gap:0.5rem;min-width:0">
+          <a class="show-tablet" href="/" aria-label="Beranda">
+            <Logo name={siteName} logoUrl={logoUrl} size={26} markOnly />
+          </a>
+          <span class="toolbar-title">{title}</span>
+        </div>
+        <div class="row" style="gap:0.5rem">
+          <span class="badge hide-mobile">{user.status === 'pending' ? 'Menunggu verifikasi' : 'Anggota'}</span>
+          <div class="toolbar-group">
+            <AppearanceMenu />
+            <a class="toolbar-cta" href="/akun/profil">Edit profil</a>
+          </div>
+        </div>
+      </div>
+
+      <nav class="section-tabs" aria-label="Menu akun">
+        {
+          nav.map((item) => (
+            <a
+              class="section-tab"
+              href={item.href}
+              aria-current={active === item.key ? 'page' : undefined}
+            >
+              {item.label}
+            </a>
+          ))
+        }
+      </nav>
+
+      <main class="page-content" id="konten">
+        <slot />
+      </main>
+    </div>
+  </div>
+
+  <nav class="mobile-tabs" aria-label="Navigasi seluler">
+    {
+      tabs.map((item) => (
+        <a
+          class="mobile-tab"
+          href={item.href}
+          aria-current={active === item.key ? 'page' : undefined}
+        >
+          <item.icon size={24} stroke-width={1.75} />
+          {item.label}
+        </a>
+      ))
+    }
+  </nav>
+</BaseLayout>

@@ -1,0 +1,71 @@
+---
+interface Props {
+  page: number;
+  totalPages: number;
+  basePath: string;
+  params?: Record<string, string | undefined>;
+}
+
+const { page, totalPages, basePath, params = {} } = Astro.props;
+const current = Math.max(1, Math.min(totalPages, page));
+
+function href(target: number): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value) search.set(key, value);
+  }
+  if (target > 1) search.set('page', String(target));
+  const query = search.toString();
+  return query ? `${basePath}?${query}` : basePath;
+}
+
+const start = Math.max(1, current - 2);
+const end = Math.min(totalPages, current + 2);
+const pages = Array.from({ length: end - start + 1 }, (_, index) => start + index);
+---
+
+{
+  totalPages > 1 && (
+    <nav class="pagination" aria-label="Navigasi halaman">
+      {current <= 1 ? (
+        <span class="page-btn is-disabled" aria-disabled="true" aria-label="Halaman sebelumnya">
+          ←
+        </span>
+      ) : (
+        <a class="page-btn" href={href(current - 1)} rel="prev" aria-label="Halaman sebelumnya">
+          ←
+        </a>
+      )}
+      {start > 1 && (
+        <>
+          <a class="page-btn" href={href(1)}>1</a>
+          {start > 2 && <span class="tertiary">…</span>}
+        </>
+      )}
+      {pages.map((target) => (
+        <a
+          class="page-btn"
+          href={href(target)}
+          aria-current={target === current ? 'page' : undefined}
+        >
+          {target}
+        </a>
+      ))}
+      {end < totalPages && (
+        <>
+          {end < totalPages - 1 && <span class="tertiary">…</span>}
+          <a class="page-btn" href={href(totalPages)}>{totalPages}</a>
+        </>
+      )}
+      {current >= totalPages ? (
+        <span class="page-btn is-disabled" aria-disabled="true" aria-label="Halaman berikutnya">
+          →
+        </span>
+      ) : (
+        <a class="page-btn" href={href(current + 1)} rel="next" aria-label="Halaman berikutnya">
+          →
+        </a>
+      )}
+    </nav>
+  )
+}

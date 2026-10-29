@@ -1,0 +1,88 @@
+---
+import { desc, eq } from 'drizzle-orm';
+import { CalendarDays, MapPin } from '@lucide/astro';
+import AccountLayout from '../../layouts/AccountLayout.astro';
+import Badge from '../../components/ui/Badge.astro';
+import EmptyState from '../../components/ui/EmptyState.astro';
+import { eventRegistrations, events, getDb } from '../../server/db';
+import { getSettings } from '../../server/settings';
+import { formatDate, formatTime } from '../../server/format';
+
+const settings = await getSettings();
+const user = Astro.locals.user!;
+
+const rows = await getDb()
+  .select({
+    id: eventRegistrations.id,
+    status: eventRegistrations.status,
+    guests: eventRegistrations.guests,
+    note: eventRegistrations.note,
+    slug: events.slug,
+    title: events.title,
+    startsAt: events.startsAt,
+    location: events.location,
+    eventStatus: events.status,
+  })
+  .from(eventRegistrations)
+  .innerJoin(events, eq(eventRegistrations.eventId, events.id))
+  .where(eq(eventRegistrations.userId, user.id))
+  .orderBy(desc(events.startsAt));
+
+const statusVariant: Record<string, 'success' | 'warning' | 'danger' | 'default' | 'accent'> = {
+  registered: 'success',
+  attended: 'accent',
+  waitlist: 'warning',
+  cancelled: 'default',
+};
+const statusLabel: Record<string, string> = {
+  registered: 'Terdaftar',
+  attended: 'Hadir',
+  waitlist: 'Daftar tunggu',
+  cancelled: 'Dibatalkan',
+};
+---
+
+<AccountLayout settings={settings} title="Agenda saya" active="agenda">
+  <div style="margin-bottom:1.25rem">
+    <h1 class="section-title">Agenda saya</h1>
+    <p class="muted" style="margin:0.3rem 0 0;font-size:0.88rem">
+      Riwayat pendaftaran agenda dan status kehadiran.
+    </p>
+  </div>
+
+  {
+    rows.length > 0 ? (
+      <div class="list-group">
+        {rows.map((row) => (
+          <a class="list-row" href={`/agenda/${row.slug}`} style="align-items:flex-start">
+            <div
+              style="width:44px;height:44px;border-radius:12px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;flex:none"
+            >
+              <CalendarDays size={19} stroke-width={1.8} />
+            </div>
+            <div style="flex:1;min-width:0">
+              <div class="row wrap" style="gap:0.4rem">
+                <strong style="font-size:0.92rem">{row.title}</strong>
+                <Badge variant={statusVariant[row.status]}>{statusLabel[row.status]}</Badge>
+              </div>
+              <div class="meta-row" style="margin-top:0.25rem">
+                <span>{formatDate(row.startsAt)} · {formatTime(row.startsAt)} WIB</span>
+                {row.location && (
+                  <span class="meta-item">
+                    <MapPin size={12} stroke-width={1.8} /> {row.location}
+                  </span>
+                )}
+                {row.guests > 0 && <span>+{row.guests} tamu</span>}
+              </div>
+            </div>
+          </a>
+        ))}
+      </div>
+    ) : (
+      <EmptyState title="Belum mengikuti agenda" description="Lihat agenda mendatang dan daftar sebagai peserta.">
+        <CalendarDays size={24} stroke-width={1.6} style="color:var(--text-tertiary)" />
+        <a class="btn btn-secondary btn-sm" href="/agenda" style="margin-top:0.5rem">Lihat agenda</a>
+      </EmptyState>
+    )
+  }
+</AccountLayout>

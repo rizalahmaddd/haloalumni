@@ -1,0 +1,82 @@
+---
+import { desc } from 'drizzle-orm';
+import { Pencil, Plus } from '@lucide/astro';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import EmptyState from '../../../components/ui/EmptyState.astro';
+import { events, getDb } from '../../../server/db';
+import { getSettings } from '../../../server/settings';
+import { formatDate, formatTime } from '../../../server/format';
+
+const settings = await getSettings();
+const rows = await getDb().select().from(events).orderBy(desc(events.startsAt));
+const sukses = Astro.url.searchParams.get('sukses');
+const error = Astro.url.searchParams.get('error');
+---
+
+<AdminLayout settings={settings} title="Agenda">
+  <div class="spread wrap" style="margin-bottom:1.25rem">
+    <div>
+      <h1 class="section-title">Agenda</h1>
+      <p class="muted" style="margin:0.3rem 0 0;font-size:0.88rem">
+        Kelola reuni, webinar, dan kegiatan alumni beserta pendaftarannya.
+      </p>
+    </div>
+    <a class="btn btn-primary btn-sm" href="/admin/agenda/baru">
+      <Plus size={15} stroke-width={2} /> Tambah agenda
+    </a>
+  </div>
+
+  {error && <div class="alert alert-error" role="alert" style="margin-bottom:1rem">{error}</div>}
+  {sukses && <div class="alert alert-success" role="status" style="margin-bottom:1rem">{sukses}</div>}
+
+  {
+    rows.length > 0 ? (
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th scope="col">Agenda</th>
+              <th scope="col">Jadwal</th>
+              <th scope="col">Mode</th>
+              <th scope="col">Status</th>
+              <th scope="col" style="text-align:right">Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((event) => (
+              <tr>
+                <td>
+                  <div style="font-weight:600">{event.title}</div>
+                  <div class="tertiary" style="font-size:0.75rem">{event.location ?? '—'}</div>
+                </td>
+                <td style="font-size:0.8rem">
+                  {formatDate(event.startsAt)}<br />
+                  <span class="tertiary">{formatTime(event.startsAt)} WIB</span>
+                </td>
+                <td style="font-size:0.8rem">{event.mode}</td>
+                <td>
+                  <Badge variant={event.status === 'published' ? 'success' : event.status === 'cancelled' ? 'danger' : 'default'}>
+                    {event.status}
+                  </Badge>
+                </td>
+                <td style="text-align:right">
+                  <div class="row" style="justify-content:flex-end;gap:0.3rem">
+                    {event.status === 'published' && (
+                      <a class="btn btn-ghost btn-sm" href={`/agenda/${event.slug}`} target="_blank" rel="noopener">Lihat</a>
+                    )}
+                    <a class="btn btn-secondary btn-sm" href={`/admin/agenda/${event.id}`}>
+                      <Pencil size={14} stroke-width={1.9} /> Edit
+                    </a>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    ) : (
+      <EmptyState title="Belum ada agenda" description="Tambahkan agenda pertama untuk alumni." />
+    )
+  }
+</AdminLayout>

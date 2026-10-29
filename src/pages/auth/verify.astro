@@ -1,0 +1,57 @@
+---
+import { eq } from 'drizzle-orm';
+import { LogIn } from '@lucide/astro';
+import AuthLayout from '../../layouts/AuthLayout.astro';
+import { consumeMagicLink, isMagicLinkUsable } from '../../server/auth/magic-link';
+import { createSession, setSessionCookie } from '../../server/auth/session';
+import { getDb, users } from '../../server/db';
+import { getSettings } from '../../server/settings';
+import { now } from '../../server/util';
+import { safeRedirectPath } from '../../server/url';
+
+const failRedirect = (message: string) => Astro.redirect(`/masuk?error=${encodeURIComponent(message)}`);
+
+// The token is only consumed on POST: email link scanners prefetch GET URLs and would burn it.
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const token = String(form.get('token') ?? '');
+  const next = safeRedirectPath(String(form.get('next') ?? ''), '/akun');
+  const userId = await consumeMagicLink(token);
+  if (!userId) return failRedirect('Tautan masuk tidak valid atau sudah kedaluwarsa.');
+
+  const db = getDb();
+  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (!user || user.status === 'suspended') return failRedirect('Akun ini tidak dapat mengakses situs.');
+
+  const session = await createSession(user.id, Astro.clientAddress, Astro.request.headers.get('user-agent') ?? undefined);
+  setSessionCookie(Astro.cookies, session.token, session.maxAge, Astro.url.protocol === 'https:');
+  await db
+    .update(users)
+    .set({ lastLoginAt: now(), emailVerifiedAt: user.emailVerifiedAt ?? now() })
+    .where(eq(users.id, user.id));
+
+  return Astro.redirect(next, 303);
+}
+
+const token = Astro.url.searchParams.get('token') ?? '';
+const next = safeRedirectPath(Astro.url.searchParams.get('next'), '/akun');
+if (!(await isMagicLinkUsable(token))) return failRedirect('Tautan masuk tidak valid atau sudah kedaluwarsa.');
+
+const settings = await getSettings();
+---
+
+<AuthLayout
+  settings={settings}
+  title="Konfirmasi masuk"
+  heading="Konfirmasi masuk"
+  subheading="Tekan tombol di bawah untuk masuk ke akun alumni Anda."
+>
+  <form method="POST" action="/auth/verify" class="stack" style="gap:0.85rem">
+    <input type="hidden" name="token" value={token} />
+    <input type="hidden" name="next" value={next} />
+    <button class="btn btn-primary btn-lg btn-block" type="submit" autofocus>
+      <LogIn size={17} stroke-width={1.9} />
+      Masuk sekarang
+    </button>
+  </form>
+</AuthLayout>

@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1793179120856,
+      "tag": "0000_lumpy_omega_sentinel",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1793277007288,
+      "tag": "0001_donation_donor_email",
+      "breakpoints": true
+    }
+  ]
+}

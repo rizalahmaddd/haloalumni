@@ -1,0 +1,22 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { defaultSettings, type Settings } from '../server/settings';
+
+Astro.response.status = 500;
+const settings = { ...defaultSettings } as Settings;
+---
+
+<BaseLayout settings={settings} title="Terjadi kesalahan" noindex>
+  <main id="konten" class="public-container" style="padding:4rem 0 5rem;text-align:center">
+    <p class="eyebrow" style="margin:0">500</p>
+    <h1 class="section-title" style="margin:0.5rem 0 0;font-size:clamp(1.8rem,1.4rem + 1.6vw,2.6rem)">
+      Terjadi kesalahan
+    </h1>
+    <p class="muted" style="max-width:46ch;margin:0.75rem auto 0">
+      Kami tidak dapat memuat halaman ini saat ini. Silakan coba lagi beberapa saat lagi.
+    </p>
+    <div class="row wrap" style="justify-content:center;margin-top:1.5rem">
+      <a class="btn btn-primary" href="/">Kembali ke beranda</a>
+    </div>
+  </main>
+</BaseLayout>

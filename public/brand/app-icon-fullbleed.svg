@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"><defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="0.35" y2="1">
+    <stop offset="0" stop-color="#4fb0ff"/>
+    <stop offset="0.48" stop-color="#0a7cf0"/>
+    <stop offset="1" stop-color="#0646b8"/>
+  </linearGradient>
+  <radialGradient id="sheen" cx="0.3" cy="0.02" r="0.85">
+    <stop offset="0" stop-color="#fff" stop-opacity=".38"/>
+    <stop offset="0.55" stop-color="#fff" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="bub" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#ffffff"/>
+    <stop offset="1" stop-color="#e3eeff"/>
+  </linearGradient>
+  <linearGradient id="cap" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#1786f5"/>
+    <stop offset="1" stop-color="#0552c9"/>
+  </linearGradient>
+  <filter id="sh" x="-30%" y="-30%" width="160%" height="170%">
+    <feDropShadow dx="0" dy="22" stdDeviation="28" flood-color="#021f5c" flood-opacity=".38"/>
+  </filter>
+</defs><rect width="1024" height="1024" fill="url(#bg)"/><rect width="1024" height="1024" fill="url(#sheen)"/><g filter="url(#sh)">
+  <path fill="url(#bub)" d="M440 228h144c135 0 244 109 244 244s-109 244-244 244H452l-150 92c-14 9-31-5-25-21l38-95C243 648 196 563 196 472c0-135 109-244 244-244Z"/>
+</g>
+<g fill="url(#cap)" stroke="url(#cap)" stroke-linejoin="round" stroke-linecap="round">
+  <path stroke-width="26" d="M512 338 708 418 512 498 316 418Z"/>
+  <path stroke-width="18" d="M398 474v70c0 0 40 46 114 46s114-46 114-46v-70l-114 46Z"/>
+</g>
+<path d="M512 418 676 448v104" fill="none" stroke="#0552c9" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="676" cy="566" r="22" fill="#0552c9"/></svg>

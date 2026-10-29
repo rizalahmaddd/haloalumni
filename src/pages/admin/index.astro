@@ -1,0 +1,257 @@
+---
+import { and, count, desc, eq, gt, sql } from 'drizzle-orm';
+import {
+  ArrowRight,
+  Briefcase,
+  CalendarDays,
+  Heart,
+  Mail,
+  ScrollText,
+  Users,
+} from '@lucide/astro';
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Badge from '../../components/ui/Badge.astro';
+import {
+  alumniProfiles,
+  auditLogs,
+  contactMessages,
+  donations,
+  donationCampaigns,
+  events,
+  getDb,
+  jobs,
+  users,
+} from '../../server/db';
+import { getSettings } from '../../server/settings';
+import { formatDate } from '../../server/format';
+import { formatRupiah } from '../../server/util';
+
+const settings = await getSettings();
+const db = getDb();
+const timestamp = Date.now();
+
+const [alumniTotal, pendingAlumni, jobsActive, pendingJobs, donationSum, pendingDonations, newMessages, upcoming] =
+  await Promise.all([
+    db
+      .select({ value: count() })
+      .from(alumniProfiles)
+      .where(and(eq(alumniProfiles.status, 'published'), eq(alumniProfiles.directoryVisible, true))),
+    db
+      .select({ value: count() })
+      .from(alumniProfiles)
+      .innerJoin(users, eq(alumniProfiles.userId, users.id))
+      .where(eq(users.status, 'pending')),
+    db.select({ value: count() }).from(jobs).where(eq(jobs.status, 'published')),
+    db.select({ value: count() }).from(jobs).where(eq(jobs.status, 'pending')),
+    db
+      .select({ value: sql<number>`coalesce(sum(${donations.amount}), 0)` })
+      .from(donations)
+      .where(eq(donations.status, 'verified')),
+    db.select({ value: count() }).from(donations).where(eq(donations.status, 'pending')),
+    db.select({ value: count() }).from(contactMessages).where(eq(contactMessages.status, 'new')),
+    db
+      .select({ value: count() })
+      .from(events)
+      .where(and(eq(events.status, 'published'), gt(events.startsAt, timestamp))),
+  ]);
+
+const [pendingAlumniRows, pendingJobRows, pendingDonationRows, recentAudit] = await Promise.all([
+  db
+    .select({
+      userId: users.id,
+      email: users.email,
+      fullName: alumniProfiles.fullName,
+      angkatan: alumniProfiles.angkatan,
+      createdAt: users.createdAt,
+    })
+    .from(users)
+    .leftJoin(alumniProfiles, eq(alumniProfiles.userId, users.id))
+    .where(eq(users.status, 'pending'))
+    .orderBy(desc(users.createdAt))
+    .limit(5),
+  db.select().from(jobs).where(eq(jobs.status, 'pending')).orderBy(desc(jobs.createdAt)).limit(5),
+  db
+    .select({
+      id: donations.id,
+      donorName: donations.donorName,
+      amount: donations.amount,
+      campaign: donationCampaigns.title,
+      createdAt: donations.createdAt,
+    })
+    .from(donations)
+    .innerJoin(donationCampaigns, eq(donations.campaignId, donationCampaigns.id))
+    .where(eq(donations.status, 'pending'))
+    .orderBy(desc(donations.createdAt))
+    .limit(5),
+  db.select().from(auditLogs).orderBy(desc(auditLogs.createdAt)).limit(8),
+]);
+
+const stats = [
+  { label: 'Alumni terbit', value: Number(alumniTotal[0]?.value ?? 0), icon: Users, href: '/admin/alumni' },
+  { label: 'Loker aktif', value: Number(jobsActive[0]?.value ?? 0), icon: Briefcase, href: '/admin/loker' },
+  { label: 'Donasi terverifikasi', value: formatRupiah(Number(donationSum[0]?.value ?? 0)), icon: Heart, href: '/admin/donasi' },
+  { label: 'Agenda mendatang', value: Number(upcoming[0]?.value ?? 0), icon: CalendarDays, href: '/admin/agenda' },
+];
+
+const queues = [
+  { label: 'Alumni menunggu', value: Number(pendingAlumni[0]?.value ?? 0), href: '/admin/alumni?status=pending' },
+  { label: 'Loker menunggu', value: Number(pendingJobs[0]?.value ?? 0), href: '/admin/loker?status=pending' },
+  { label: 'Donasi menunggu', value: Number(pendingDonations[0]?.value ?? 0), href: '/admin/donasi' },
+  { label: 'Pesan baru', value: Number(newMessages[0]?.value ?? 0), href: '/admin/pesan' },
+];
+---
+
+<AdminLayout settings={settings} title="Dashboard">
+  <div style="margin-bottom:1.35rem">
+    <h1 class="section-title">Ringkasan</h1>
+    <p class="muted" style="margin:0.3rem 0 0;font-size:0.88rem">
+      Antrian moderasi dan aktivitas terbaru situs alumni.
+    </p>
+  </div>
+
+  <div class="grid-auto" style="grid-template-columns:repeat(auto-fit,minmax(190px,1fr));margin-bottom:1.5rem">
+    {
+      stats.map((stat) => (
+        <a class="stat-tile" href={stat.href}>
+          <div class="row" style="gap:0.4rem;color:var(--text-tertiary)">
+            <stat.icon size={15} stroke-width={1.9} />
+            <span style="font-size:0.76rem;font-weight:600">{stat.label}</span>
+          </div>
+          <div class="stat-value">{stat.value}</div>
+        </a>
+      ))
+    }
+  </div>
+
+  <section class="solid-panel" style="padding:1.1rem 1.25rem;margin-bottom:1.5rem">
+    <div class="row wrap" style="gap:0.6rem">
+      <span class="eyebrow" style="margin-right:0.25rem">Antrian</span>
+      {
+        queues.map((queue) => (
+          <a class="chip" href={queue.href}>
+            {queue.label}
+            <span class="badge" style={queue.value > 0 ? 'background:var(--warning-soft);color:var(--warning)' : ''}>
+              {queue.value}
+            </span>
+          </a>
+        ))
+      }
+    </div>
+  </section>
+
+  <div class="grid-2" style="align-items:start">
+    <section class="stack" style="gap:1.25rem">
+      <div class="solid-panel" style="padding:1.25rem">
+        <div class="spread">
+          <h2 class="section-title" style="font-size:1rem">Pendaftar alumni</h2>
+          <a class="btn btn-ghost btn-sm" href="/admin/alumni?status=pending">Lihat semua</a>
+        </div>
+        <div style="margin-top:0.75rem">
+          {
+            pendingAlumniRows.length > 0 ? (
+              pendingAlumniRows.map((row) => (
+                <div class="list-row" style="padding:0.6rem 0">
+                  <div style="flex:1;min-width:0">
+                    <div style="font-weight:600;font-size:0.88rem">{row.fullName ?? row.email}</div>
+                    <div class="tertiary" style="font-size:0.75rem">
+                      Angkatan {row.angkatan ?? '—'} · {formatDate(row.createdAt)}
+                    </div>
+                  </div>
+                  <a class="btn btn-secondary btn-sm" href={`/admin/alumni/${row.userId}`}>Tinjau</a>
+                </div>
+              ))
+            ) : (
+              <p class="muted" style="font-size:0.86rem;margin:0">Tidak ada pendaftar menunggu.</p>
+            )
+          }
+        </div>
+      </div>
+
+      <div class="solid-panel" style="padding:1.25rem">
+        <div class="spread">
+          <h2 class="section-title" style="font-size:1rem">Loker menunggu moderasi</h2>
+          <a class="btn btn-ghost btn-sm" href="/admin/loker?status=pending">Lihat semua</a>
+        </div>
+        <div style="margin-top:0.75rem">
+          {
+            pendingJobRows.length > 0 ? (
+              pendingJobRows.map((job) => (
+                <div class="list-row" style="padding:0.6rem 0">
+                  <div style="flex:1;min-width:0">
+                    <div style="font-weight:600;font-size:0.88rem">{job.title}</div>
+                    <div class="tertiary" style="font-size:0.75rem">{job.company} · {formatDate(job.createdAt)}</div>
+                  </div>
+                  <a class="btn btn-secondary btn-sm" href={`/admin/loker/${job.id}`}>Tinjau</a>
+                </div>
+              ))
+            ) : (
+              <p class="muted" style="font-size:0.86rem;margin:0">Tidak ada loker menunggu.</p>
+            )
+          }
+        </div>
+      </div>
+    </section>
+
+    <section class="stack" style="gap:1.25rem">
+      <div class="solid-panel" style="padding:1.25rem">
+        <div class="spread">
+          <h2 class="section-title" style="font-size:1rem">Donasi menunggu</h2>
+          <a class="btn btn-ghost btn-sm" href="/admin/donasi">Lihat semua</a>
+        </div>
+        <div style="margin-top:0.75rem">
+          {
+            pendingDonationRows.length > 0 ? (
+              pendingDonationRows.map((row) => (
+                <a class="list-row" href={`/admin/donasi/${row.id}`} style="padding:0.6rem 0">
+                  <div style="flex:1;min-width:0">
+                    <div style="font-weight:600;font-size:0.88rem">{row.donorName}</div>
+                    <div class="tertiary" style="font-size:0.75rem">{row.campaign}</div>
+                  </div>
+                  <span style="font-size:0.84rem;font-weight:650">{formatRupiah(row.amount)}</span>
+                </a>
+              ))
+            ) : (
+              <p class="muted" style="font-size:0.86rem;margin:0">Tidak ada donasi menunggu.</p>
+            )
+          }
+        </div>
+      </div>
+
+      <div class="solid-panel" style="padding:1.25rem">
+        <div class="spread">
+          <div class="row" style="gap:0.4rem">
+            <ScrollText size={16} stroke-width={1.8} />
+            <h2 class="section-title" style="font-size:1rem">Audit terbaru</h2>
+          </div>
+          <a class="btn btn-ghost btn-sm" href="/admin/audit">Semua</a>
+        </div>
+        <div style="margin-top:0.6rem">
+          {
+            recentAudit.length > 0 ? (
+              recentAudit.map((log) => (
+                <div class="spread" style="padding:0.35rem 0;font-size:0.78rem">
+                  <span class="muted">{log.action}</span>
+                  <span class="tertiary">{formatDate(log.createdAt)}</span>
+                </div>
+              ))
+            ) : (
+              <p class="muted" style="font-size:0.86rem;margin:0">Belum ada aktivitas.</p>
+            )
+          }
+        </div>
+      </div>
+
+      <div class="glass-panel" style="padding:1.25rem">
+        <div class="row" style="gap:0.45rem;font-weight:650;font-size:0.9rem">
+          <Mail size={15} stroke-width={1.8} /> Tips moderasi
+        </div>
+        <p class="muted" style="font-size:0.82rem;margin:0.45rem 0 0;line-height:1.6">
+          Periksa kembali data angkatan dan program sebelum menyetujui alumni. Setiap keputusan tercatat di audit log.
+        </p>
+        <a class="btn btn-secondary btn-sm" href="/admin/pengaturan" style="margin-top:0.7rem">
+          Pengaturan situs <ArrowRight size={14} stroke-width={2} />
+        </a>
+      </div>
+    </section>
+  </div>
+</AdminLayout>

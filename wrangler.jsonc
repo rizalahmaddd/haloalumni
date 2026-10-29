@@ -1,0 +1,35 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "alumni",
+  "account_id": "baf60cca6b50fa6ce5b75d25d0443220",
+  "compatibility_date": "2026-10-26",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "PUBLIC_SITE_URL": "https://haloalumni.my.id",
+    "EMAIL_FROM": "Alumni <no-reply@haloalumni.my.id>"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "alumni-db",
+      // Ganti dengan ID dari `wrangler d1 create alumni-db`
+      "database_id": "13032683-df2f-4574-87bb-41ea5cda86d6"
+    }
+  ],
+  "routes": [
+    { "pattern": "haloalumni.my.id", "custom_domain": true }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "alumni-media"
+    },
+    {
+      "binding": "PRIVATE",
+      "bucket_name": "alumni-private"
+    }
+  ]
+}

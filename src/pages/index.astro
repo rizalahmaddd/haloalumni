@@ -1,0 +1,239 @@
+---
+import { and, count, countDistinct, desc, eq, gt, sql } from 'drizzle-orm';
+import { ArrowRight, Briefcase, CalendarDays, Heart, Search, Sparkles, Users } from '@lucide/astro';
+import PublicLayout from '../layouts/PublicLayout.astro';
+import ProfileCard from '../components/public/ProfileCard.astro';
+import JobRow from '../components/public/JobRow.astro';
+import PostCard from '../components/public/PostCard.astro';
+import EventCard from '../components/public/EventCard.astro';
+import DonationCard from '../components/public/DonationCard.astro';
+import { alumniProfiles, donationCampaigns, donations, events, getDb, jobs, posts } from '../server/db';
+import { getSettings } from '../server/settings';
+import { formatNumber } from '../server/util';
+
+const settings = await getSettings();
+const db = getDb();
+const timestamp = Date.now();
+
+const [alumniRows, jobRows, postRows, eventRows, campaignRows, alumniCount, yearCount, jobCount, eventCount] =
+  await Promise.all([
+    db
+      .select({
+        slug: alumniProfiles.slug,
+        fullName: alumniProfiles.fullName,
+        angkatan: alumniProfiles.angkatan,
+        program: alumniProfiles.program,
+        photoKey: alumniProfiles.photoKey,
+        city: alumniProfiles.city,
+        company: alumniProfiles.company,
+        jobTitle: alumniProfiles.jobTitle,
+        industry: alumniProfiles.industry,
+        verifiedAt: alumniProfiles.verifiedAt,
+        showWorkplace: alumniProfiles.showWorkplace,
+      })
+      .from(alumniProfiles)
+      .where(and(eq(alumniProfiles.status, 'published'), eq(alumniProfiles.directoryVisible, true)))
+      .orderBy(desc(alumniProfiles.verifiedAt))
+      .limit(6),
+    db
+      .select()
+      .from(jobs)
+      .where(eq(jobs.status, 'published'))
+      .orderBy(desc(jobs.featured), desc(jobs.publishedAt))
+      .limit(4),
+    db.select().from(posts).where(eq(posts.status, 'published')).orderBy(desc(posts.publishedAt)).limit(3),
+    db
+      .select()
+      .from(events)
+      .where(and(eq(events.status, 'published'), gt(events.startsAt, timestamp)))
+      .orderBy(events.startsAt)
+      .limit(2),
+    db
+      .select({
+        slug: donationCampaigns.slug,
+        title: donationCampaigns.title,
+        targetAmount: donationCampaigns.targetAmount,
+        deadline: donationCampaigns.deadline,
+        status: donationCampaigns.status,
+        collected: sql<number>`coalesce(sum(${donations.amount}), 0)`,
+      })
+      .from(donationCampaigns)
+      .leftJoin(
+        donations,
+        and(eq(donations.campaignId, donationCampaigns.id), eq(donations.status, 'verified')),
+      )
+      .where(eq(donationCampaigns.status, 'active'))
+      .groupBy(donationCampaigns.id)
+      .limit(2),
+    db
+      .select({ value: count() })
+      .from(alumniProfiles)
+      .where(and(eq(alumniProfiles.status, 'published'), eq(alumniProfiles.directoryVisible, true))),
+    db
+      .select({ value: countDistinct(alumniProfiles.angkatan) })
+      .from(alumniProfiles)
+      .where(eq(alumniProfiles.status, 'published')),
+    db.select({ value: count() }).from(jobs).where(eq(jobs.status, 'published')),
+    db
+      .select({ value: count() })
+      .from(events)
+      .where(and(eq(events.status, 'published'), gt(events.startsAt, timestamp))),
+  ]);
+
+const stats = [
+  { label: 'Alumni terdaftar', value: Number(alumniCount[0]?.value ?? 0), icon: Users },
+  { label: 'Angkatan', value: Number(yearCount[0]?.value ?? 0), icon: Sparkles },
+  { label: 'Loker aktif', value: Number(jobCount[0]?.value ?? 0), icon: Briefcase },
+  { label: 'Agenda mendatang', value: Number(eventCount[0]?.value ?? 0), icon: CalendarDays },
+];
+
+const yearLabel = settings['site.year_label'];
+---
+
+<PublicLayout settings={settings} active="beranda">
+  <section class="hero">
+    <div class="public-container">
+      <p class="eyebrow">{settings['site.name']}</p>
+      <h1 class="hero-title">{settings['site.hero_title']}</h1>
+      <p class="hero-sub">{settings['site.hero_subtitle']}</p>
+
+      <div class="row wrap" style="margin-top:1.5rem">
+        <a class="btn btn-primary btn-lg" href="/direktori">
+          <Search size={18} stroke-width={1.9} />
+          Jelajahi direktori
+        </a>
+        <a class="btn btn-secondary btn-lg" href="/loker/pasang">
+          Pasang loker
+          <ArrowRight size={17} stroke-width={1.9} />
+        </a>
+      </div>
+
+      <div class="grid-auto" style="margin-top:2.5rem;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
+        {
+          stats.map((stat) => (
+            <div class="stat-tile">
+              <div class="row" style="gap:0.4rem;color:var(--text-tertiary)">
+                <stat.icon size={15} stroke-width={1.9} />
+                <span style="font-size:0.76rem;font-weight:600">{stat.label}</span>
+              </div>
+              <div class="stat-value">{formatNumber(stat.value)}</div>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <div class="public-container stack" style="gap:3rem;padding-bottom:2rem">
+    <section>
+      <div class="section-head">
+        <div>
+          <h2 class="section-title">Alumni terbaru</h2>
+          <p class="muted" style="margin:0.25rem 0 0;font-size:0.9rem">
+            Profil yang sudah terverifikasi dan terbuka untuk dihubungi.
+          </p>
+        </div>
+        <a class="btn btn-ghost btn-sm" href="/direktori">
+          Lihat semua <ArrowRight size={15} stroke-width={2} />
+        </a>
+      </div>
+
+      {alumniRows.length > 0 ? (
+        <div class="grid-auto">
+          {alumniRows.map((profile) => <ProfileCard profile={profile} yearLabel={yearLabel} />)}
+        </div>
+      ) : (
+        <p class="muted">Belum ada profil alumni yang terbit.</p>
+      )}
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div>
+          <h2 class="section-title">Loker pilihan</h2>
+          <p class="muted" style="margin:0.25rem 0 0;font-size:0.9rem">
+            Peluang dari jaringan alumni dan mitra.
+          </p>
+        </div>
+        <a class="btn btn-ghost btn-sm" href="/loker">
+          Semua loker <ArrowRight size={15} stroke-width={2} />
+        </a>
+      </div>
+      {jobRows.length > 0 ? (
+        <div class="list-group">
+          {jobRows.map((job) => <JobRow job={job} />)}
+        </div>
+      ) : (
+        <p class="muted">Belum ada loker aktif.</p>
+      )}
+    </section>
+
+    <section>
+      <div class="section-head">
+        <div>
+          <h2 class="section-title">Kabar alumni</h2>
+          <p class="muted" style="margin:0.25rem 0 0;font-size:0.9rem">
+            Cerita, program, dan pengumuman terbaru.
+          </p>
+        </div>
+        <a class="btn btn-ghost btn-sm" href="/berita">
+          Semua berita <ArrowRight size={15} stroke-width={2} />
+        </a>
+      </div>
+      {postRows.length > 0 ? (
+        <div class="grid-auto">
+          {postRows.map((post) => <PostCard post={post} />)}
+        </div>
+      ) : (
+        <p class="muted">Belum ada berita.</p>
+      )}
+    </section>
+
+    <section class="grid-2">
+      <div>
+        <div class="section-head">
+          <h2 class="section-title">Agenda mendatang</h2>
+          <a class="btn btn-ghost btn-sm" href="/agenda">Lihat semua</a>
+        </div>
+        <div class="stack">
+          {eventRows.length > 0 ? (
+            eventRows.map((event) => <EventCard event={event} />)
+          ) : (
+            <p class="muted">Belum ada agenda terjadwal.</p>
+          )}
+        </div>
+      </div>
+
+      <div>
+        <div class="section-head">
+          <h2 class="section-title">Dukung program alumni</h2>
+          <a class="btn btn-ghost btn-sm" href="/donasi">Lihat semua</a>
+        </div>
+        <div class="stack">
+          {campaignRows.length > 0 ? (
+            campaignRows.map((campaign) => (
+              <DonationCard campaign={campaign} collected={Number(campaign.collected ?? 0)} />
+            ))
+          ) : (
+            <p class="muted">Belum ada kampanye aktif.</p>
+          )}
+        </div>
+      </div>
+    </section>
+
+    <section class="glass-panel" style="padding:1.6rem;border-radius:var(--radius-window)">
+      <div class="spread wrap" style="gap:1.25rem">
+        <div style="max-width:48ch">
+          <h2 class="section-title">Belum ada di direktori?</h2>
+          <p class="muted" style="margin:0.4rem 0 0;font-size:0.92rem">
+            Daftar sebagai alumni, lengkapi profil, dan dapatkan kartu alumni digital dengan verifikasi QR.
+          </p>
+        </div>
+        <div class="row wrap">
+          <a class="btn btn-primary" href="/daftar">Daftar sekarang</a>
+          <a class="btn btn-secondary" href="/masuk">Sudah punya akun</a>
+        </div>
+      </div>
+    </section>
+  </div>
+</PublicLayout>

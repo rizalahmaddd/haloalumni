@@ -1,0 +1,72 @@
+---
+import { desc } from 'drizzle-orm';
+import { Pencil, Plus } from '@lucide/astro';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import EmptyState from '../../../components/ui/EmptyState.astro';
+import { getDb, pages } from '../../../server/db';
+import { getSettings } from '../../../server/settings';
+import { formatDate } from '../../../server/format';
+
+const settings = await getSettings();
+const rows = await getDb().select().from(pages).orderBy(desc(pages.updatedAt));
+const sukses = Astro.url.searchParams.get('sukses');
+const error = Astro.url.searchParams.get('error');
+---
+
+<AdminLayout settings={settings} title="Halaman">
+  <div class="spread wrap" style="margin-bottom:1.25rem">
+    <div>
+      <h1 class="section-title">Halaman</h1>
+      <p class="muted" style="margin:0.3rem 0 0;font-size:0.88rem">
+        Halaman statis seperti tentang, kontak, dan kebijakan privasi.
+      </p>
+    </div>
+    <a class="btn btn-primary btn-sm" href="/admin/halaman/baru">
+      <Plus size={15} stroke-width={2} /> Tambah halaman
+    </a>
+  </div>
+
+  {error && <div class="alert alert-error" role="alert" style="margin-bottom:1rem">{error}</div>}
+  {sukses && <div class="alert alert-success" role="status" style="margin-bottom:1rem">{sukses}</div>}
+
+  {
+    rows.length > 0 ? (
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th scope="col">Judul</th>
+              <th scope="col">Slug</th>
+              <th scope="col">Status</th>
+              <th scope="col">Diperbarui</th>
+              <th scope="col" style="text-align:right">Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((page) => (
+              <tr>
+                <td style="font-weight:600">{page.title}</td>
+                <td style="font-size:0.8rem">/{page.slug}</td>
+                <td><Badge variant={page.status === 'published' ? 'success' : 'default'}>{page.status}</Badge></td>
+                <td class="tertiary" style="font-size:0.78rem">{formatDate(page.updatedAt)}</td>
+                <td style="text-align:right">
+                  <div class="row" style="justify-content:flex-end;gap:0.3rem">
+                    {page.status === 'published' && (
+                      <a class="btn btn-ghost btn-sm" href={`/${page.slug}`} target="_blank" rel="noopener">Lihat</a>
+                    )}
+                    <a class="btn btn-secondary btn-sm" href={`/admin/halaman/${page.id}`}>
+                      <Pencil size={14} stroke-width={1.9} /> Edit
+                    </a>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    ) : (
+      <EmptyState title="Belum ada halaman" description="Tambahkan halaman informasi pertama." />
+    )
+  }
+</AdminLayout>

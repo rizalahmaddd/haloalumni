@@ -1,0 +1,172 @@
+---
+import { actions } from 'astro:actions';
+import { and, count, desc, eq, like, or, type SQL } from 'drizzle-orm';
+import { Download, Search } from '@lucide/astro';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import Pagination from '../../../components/ui/Pagination.astro';
+import EmptyState from '../../../components/ui/EmptyState.astro';
+import { alumniProfiles, getDb, users } from '../../../server/db';
+import { getSettings } from '../../../server/settings';
+import { formatDate } from '../../../server/format';
+import { sanitizeSearchTerm } from '../../../server/url';
+
+const settings = await getSettings();
+const db = getDb();
+const url = Astro.url;
+const q = (url.searchParams.get('q') ?? '').trim();
+const status = (url.searchParams.get('status') ?? 'all').trim();
+const page = Math.max(1, Math.min(100, Number.parseInt(url.searchParams.get('page') ?? '1', 10) || 1));
+const pageSize = 25;
+
+const conditions: SQL[] = [];
+if (status === 'pending' || status === 'active' || status === 'suspended') {
+  conditions.push(eq(users.status, status));
+}
+if (q) {
+  const term = `%${sanitizeSearchTerm(q)}%`;
+  conditions.push(or(like(alumniProfiles.fullName, term), like(users.email, term))!);
+}
+const where = conditions.length ? and(...conditions) : undefined;
+
+const [rows, totalRows] = await Promise.all([
+  db
+    .select({
+      userId: users.id,
+      email: users.email,
+      role: users.role,
+      userStatus: users.status,
+      createdAt: users.createdAt,
+      profileId: alumniProfiles.id,
+      fullName: alumniProfiles.fullName,
+      angkatan: alumniProfiles.angkatan,
+      program: alumniProfiles.program,
+      cardNo: alumniProfiles.cardNo,
+      profileStatus: alumniProfiles.status,
+      verifiedAt: alumniProfiles.verifiedAt,
+    })
+    .from(users)
+    .leftJoin(alumniProfiles, eq(alumniProfiles.userId, users.id))
+    .where(where)
+    .orderBy(desc(users.createdAt))
+    .limit(pageSize)
+    .offset((page - 1) * pageSize),
+  db
+    .select({ value: count() })
+    .from(users)
+    .leftJoin(alumniProfiles, eq(alumniProfiles.userId, users.id))
+    .where(where),
+]);
+
+const total = Number(totalRows[0]?.value ?? 0);
+const totalPages = Math.max(1, Math.ceil(total / pageSize));
+const error = url.searchParams.get('error');
+const sukses = url.searchParams.get('sukses');
+const tabs = [
+  { value: 'all', label: 'Semua' },
+  { value: 'pending', label: 'Menunggu' },
+  { value: 'active', label: 'Aktif' },
+  { value: 'suspended', label: 'Ditangguhkan' },
+];
+---
+
+<AdminLayout settings={settings} title="Alumni">
+  <div class="spread wrap" style="margin-bottom:1.25rem">
+    <div>
+      <h1 class="section-title">Alumni</h1>
+      <p class="muted" style="margin:0.3rem 0 0;font-size:0.88rem">
+        Verifikasi pendaftar, kelola profil, dan pantau kartu alumni.
+      </p>
+    </div>
+    <a class="btn btn-secondary btn-sm" href="/api/admin/export/alumni">
+      <Download size={15} stroke-width={1.9} /> Export CSV
+    </a>
+  </div>
+
+  {error && <div class="alert alert-error" role="alert" style="margin-bottom:1rem">{error}</div>}
+  {sukses && <div class="alert alert-success" role="status" style="margin-bottom:1rem">{sukses}</div>}
+
+  <div class="row wrap" style="gap:0.35rem;margin-bottom:0.75rem">
+    {
+      tabs.map((tab) => (
+        <a
+          class="chip"
+          href={`/admin/alumni${tab.value === 'all' ? '' : `?status=${tab.value}`}`}
+          aria-current={status === tab.value ? 'page' : undefined}
+        >
+          {tab.label}
+        </a>
+      ))
+    }
+  </div>
+
+  <form method="get" action="/admin/alumni" class="row" style="gap:0.5rem;margin-bottom:1rem">
+    <div class="search-field" style="flex:1;max-width:360px">
+      <Search size={15} />
+      <input name="q" value={q} placeholder="Cari nama atau email…" />
+    </div>
+    {status !== 'all' && <input type="hidden" name="status" value={status} />}
+    <button class="btn btn-secondary btn-sm" type="submit">Cari</button>
+  </form>
+
+  {
+    rows.length > 0 ? (
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th scope="col">Nama</th>
+              <th scope="col">Angkatan</th>
+              <th scope="col">Status</th>
+              <th scope="col">Kartu</th>
+              <th scope="col">Daftar</th>
+              <th scope="col" style="text-align:right">Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr>
+                <td>
+                  <div style="font-weight:600">{row.fullName ?? '—'}</div>
+                  <div class="tertiary" style="font-size:0.75rem">{row.email}</div>
+                </td>
+                <td>
+                  <div>{row.angkatan ?? '—'}</div>
+                  <div class="tertiary" style="font-size:0.75rem">{row.program ?? ''}</div>
+                </td>
+                <td>
+                  <div class="stack" style="gap:0.25rem;align-items:flex-start">
+                    <Badge
+                      variant={row.userStatus === 'active' ? 'success' : row.userStatus === 'pending' ? 'warning' : 'danger'}
+                    >
+                      {row.userStatus === 'active' ? 'Aktif' : row.userStatus === 'pending' ? 'Menunggu' : 'Ditangguhkan'}
+                    </Badge>
+                    {row.profileStatus === 'published' && <Badge variant="accent">Profil terbit</Badge>}
+                  </div>
+                </td>
+                <td class="tabular" style="font-size:0.8rem">{row.cardNo ?? '—'}</td>
+                <td class="tertiary" style="font-size:0.78rem">{formatDate(row.createdAt)}</td>
+                <td style="text-align:right">
+                  <div class="row" style="justify-content:flex-end;gap:0.35rem">
+                    {row.userStatus === 'pending' && (
+                      <form method="POST" action={actions.admin.moderateAlumni}>
+                        <input type="hidden" name="userId" value={row.userId} />
+                        <input type="hidden" name="action" value="approve" />
+                        <button class="btn btn-primary btn-sm" type="submit">Setujui</button>
+                      </form>
+                    )}
+                    <a class="btn btn-secondary btn-sm" href={`/admin/alumni/${row.userId}`}>Detail</a>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    ) : (
+      <EmptyState title="Tidak ada data alumni" description="Ubah filter atau cari dengan kata kunci lain." />
+    )
+  }
+
+  <Pagination page={page} totalPages={totalPages} basePath="/admin/alumni" params={{ q, status }} />
+</AdminLayout>

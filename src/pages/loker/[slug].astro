@@ -1,0 +1,230 @@
+---
+import { actions } from 'astro:actions';
+import { and, eq } from 'drizzle-orm';
+import {
+  ArrowLeft,
+  ArrowUpRight,
+  Bookmark,
+  BookmarkCheck,
+  Building,
+  Clock,
+  MapPin,
+  ShieldCheck,
+  Wallet,
+} from '@lucide/astro';
+import PublicLayout from '../../layouts/PublicLayout.astro';
+import Badge from '../../components/ui/Badge.astro';
+import { getDb, jobBookmarks, jobs } from '../../server/db';
+import { getSettings } from '../../server/settings';
+import { formatDate, formatDateTime } from '../../server/format';
+import { formatRupiah } from '../../server/util';
+
+const { slug } = Astro.params;
+const settings = await getSettings();
+const db = getDb();
+const user = Astro.locals.user;
+
+const [job] = await db.select().from(jobs).where(eq(jobs.slug, slug ?? '')).limit(1);
+const visible = job && (job.status === 'published' || user?.role === 'admin');
+if (!job || !visible) Astro.response.status = 404;
+
+const bookmarked =
+  job && user
+    ? Boolean(
+        (
+          await db
+            .select({ userId: jobBookmarks.userId })
+            .from(jobBookmarks)
+            .where(and(eq(jobBookmarks.userId, user.id), eq(jobBookmarks.jobId, job.id)))
+            .limit(1)
+        )[0],
+      )
+    : false;
+
+const expired = job?.expiresAt != null && job.expiresAt < Date.now();
+const jobOrigin = new URL(Astro.site ?? Astro.url).origin;
+const typeLabel: Record<string, string> = {
+  full: 'Full-time',
+  part: 'Part-time',
+  contract: 'Kontrak',
+  internship: 'Magang',
+  freelance: 'Freelance',
+};
+const modeLabel: Record<string, string> = { onsite: 'Onsite', hybrid: 'Hybrid', remote: 'Remote' };
+const feedback = Astro.url.searchParams.get('sukses') ?? Astro.url.searchParams.get('error');
+const feedbackType = Astro.url.searchParams.get('error') ? 'error' : 'success';
+---
+
+<PublicLayout
+  settings={settings}
+  active="loker"
+  title={job ? `${job.title} · ${job.company}` : 'Loker'}
+  description={job?.descriptionMd.slice(0, 180)}
+  noindex={!visible}
+  type="website"
+  jsonLd={visible && job ? {
+    '@context': 'https://schema.org',
+    '@type': 'JobPosting',
+    title: job.title,
+    description: job.descriptionHtml,
+    datePosted: new Date(job.publishedAt ?? job.createdAt).toISOString(),
+    validThrough: job.expiresAt ? new Date(job.expiresAt).toISOString() : undefined,
+    employmentType:
+      job.employmentType === 'full'
+        ? 'FULL_TIME'
+        : job.employmentType === 'part'
+          ? 'PART_TIME'
+          : job.employmentType === 'contract'
+            ? 'CONTRACTOR'
+            : job.employmentType === 'internship'
+              ? 'INTERN'
+              : 'OTHER',
+    hiringOrganization: { '@type': 'Organization', name: job.company },
+    jobLocation: {
+      '@type': 'Place',
+      address: { '@type': 'PostalAddress', addressLocality: job.location ?? 'Indonesia' },
+    },
+    ...(job.salaryMin || job.salaryMax
+      ? {
+          baseSalary: {
+            '@type': 'MonetaryAmount',
+            currency: 'IDR',
+            value: {
+              '@type': 'QuantitativeValue',
+              minValue: job.salaryMin ?? undefined,
+              maxValue: job.salaryMax ?? undefined,
+              unitText: 'MONTH',
+            },
+          },
+        }
+      : {}),
+    url: `${jobOrigin}/loker/${job.slug}`,
+    directApply: false,
+  } : undefined}
+>
+  {
+    !job || !visible ? (
+      <div class="public-container" style="padding:4rem 1rem">
+        <p class="eyebrow">404</p>
+        <h1 class="page-title" style="margin-top:0.4rem">Loker tidak ditemukan</h1>
+        <a class="btn btn-secondary" href="/loker" style="margin-top:1rem">
+          <ArrowLeft size={16} /> Semua loker
+        </a>
+      </div>
+    ) : (
+      <div class="public-container" style="padding-top:1.75rem;padding-bottom:2rem">
+        <a class="btn btn-ghost btn-sm" href="/loker" style="margin-bottom:1rem">
+          <ArrowLeft size={15} stroke-width={2} /> Loker
+        </a>
+
+        {feedback && (
+          <div class:list={['alert', feedbackType === 'error' ? 'alert-error' : 'alert-success']} style="margin-bottom:1rem">
+            {feedback}
+          </div>
+        )}
+
+        <div class="grid-2" style="grid-template-columns:minmax(0,1fr) 320px;align-items:start">
+          <article class="solid-panel" style="padding:1.5rem">
+            <div class="row wrap" style="gap:0.5rem">
+              <Badge>{typeLabel[job.employmentType]}</Badge>
+              <Badge>{modeLabel[job.workMode]}</Badge>
+              {job.featured && <Badge variant="warning">Unggulan</Badge>}
+              {expired && <Badge variant="danger">Ditutup</Badge>}
+            </div>
+
+            <h1 class="section-title" style="margin-top:0.75rem;font-size:clamp(1.6rem,1.3rem + 1.2vw,2.1rem)">
+              {job.title}
+            </h1>
+            <p class="muted" style="margin:0.35rem 0 0;font-size:1rem">{job.company}</p>
+
+            <div class="meta-row" style="margin-top:0.8rem">
+              {job.location && (
+                <span class="meta-item">
+                  <MapPin size={14} stroke-width={1.8} /> {job.location}
+                </span>
+              )}
+              <span class="meta-item">
+                <Clock size={14} stroke-width={1.8} /> Dipublikasikan {formatDate(job.publishedAt)}
+              </span>
+              {job.expiresAt && (
+                <span class="meta-item">Berlaku hingga {formatDate(job.expiresAt)}</span>
+              )}
+            </div>
+
+            <hr class="divider" style="margin:1.25rem 0" />
+
+            <div class="prose-content" set:html={job.descriptionHtml} />
+
+          </article>
+
+          <aside class="stack" style="position:sticky;top:calc(var(--toolbar-height) + 1rem)">
+            <div class="glass-panel" style="padding:1.25rem">
+              <div class="row" style="gap:0.5rem;color:var(--text-tertiary);font-size:0.78rem;font-weight:650;text-transform:uppercase;letter-spacing:0.08em">
+                <Wallet size={14} stroke-width={1.9} /> Rentang gaji
+              </div>
+              <p style="margin:0.4rem 0 0;font-size:1.05rem;font-weight:650">
+                {job.salaryMin || job.salaryMax
+                  ? `${job.salaryMin ? formatRupiah(job.salaryMin) : '—'} – ${job.salaryMax ? formatRupiah(job.salaryMax) : '—'}`
+                  : 'Tidak ditampilkan'}
+              </p>
+
+              <div class="divider" style="margin:1rem 0" />
+
+              {expired ? (
+                <p class="muted" style="font-size:0.86rem;margin:0">
+                  Lowongan ini sudah ditutup.
+                </p>
+              ) : job.applyUrl ? (
+                <a class="btn btn-primary btn-block" href={job.applyUrl} target="_blank" rel="noopener noreferrer">
+                  Lamar sekarang <ArrowUpRight size={16} stroke-width={2} />
+                </a>
+              ) : job.contactEmail ? (
+                <a class="btn btn-primary btn-block" href={`mailto:${job.contactEmail}`}>
+                  Kirim lamaran
+                </a>
+              ) : (
+                <p class="muted" style="font-size:0.86rem;margin:0">
+                  Hubungi perusahaan melalui informasi di deskripsi.
+                </p>
+              )}
+
+              {user ? (
+                <form method="POST" action={actions.jobs.toggleBookmark} style="margin-top:0.6rem">
+                  <input type="hidden" name="jobId" value={job.id} />
+                  <input type="hidden" name="next" value={`/loker/${job.slug}`} />
+                  <button class="btn btn-secondary btn-block" type="submit">
+                    {bookmarked ? <BookmarkCheck size={16} /> : <Bookmark size={16} />}
+                    {bookmarked ? 'Tersimpan' : 'Simpan loker'}
+                  </button>
+                </form>
+              ) : (
+                <a class="btn btn-ghost btn-block" href={`/masuk?next=/loker/${job.slug}`} style="margin-top:0.6rem">
+                  Masuk untuk menyimpan
+                </a>
+              )}
+            </div>
+
+            <div class="solid-panel" style="padding:1.1rem">
+              <div class="row" style="gap:0.4rem;font-size:0.82rem;color:var(--text-secondary)">
+                <ShieldCheck size={15} stroke-width={1.9} />
+                Dimoderasi oleh admin alumni
+              </div>
+              <p class="tertiary" style="font-size:0.78rem;margin:0.4rem 0 0">
+                Selalu waspada terhadap permintaan biaya atau data sensitif.
+              </p>
+            </div>
+
+            <div class="solid-panel" style="padding:1.1rem">
+              <div class="row" style="gap:0.4rem;font-weight:650;font-size:0.9rem">
+                <Building size={15} stroke-width={1.9} /> {job.company}
+              </div>
+              <p class="tertiary" style="font-size:0.78rem;margin:0.35rem 0 0">
+                Terakhir diperbarui {formatDateTime(job.updatedAt)}
+              </p>
+            </div>
+          </aside>
+        </div>
+      </div>
+    )
+  }
+</PublicLayout>

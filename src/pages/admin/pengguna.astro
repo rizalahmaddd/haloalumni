@@ -1,0 +1,105 @@
+---
+import { actions } from 'astro:actions';
+import { desc, eq } from 'drizzle-orm';
+import { Shield } from '@lucide/astro';
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Badge from '../../components/ui/Badge.astro';
+import { alumniProfiles, getDb, users } from '../../server/db';
+import { getSettings } from '../../server/settings';
+import { formatDate } from '../../server/format';
+
+if (Astro.locals.user?.role !== 'admin') return Astro.redirect('/admin');
+
+const settings = await getSettings();
+const actor = Astro.locals.user!;
+const rows = await getDb()
+  .select({
+    id: users.id,
+    email: users.email,
+    role: users.role,
+    status: users.status,
+    createdAt: users.createdAt,
+    fullName: alumniProfiles.fullName,
+  })
+  .from(users)
+  .leftJoin(alumniProfiles, eq(alumniProfiles.userId, users.id))
+  .orderBy(desc(users.createdAt))
+  .limit(200);
+
+const sukses = Astro.url.searchParams.get('sukses');
+const error = Astro.url.searchParams.get('error');
+---
+
+<AdminLayout settings={settings} title="Pengguna">
+  <div style="margin-bottom:1.25rem">
+    <h1 class="section-title">Pengguna</h1>
+    <p class="muted" style="margin:0.3rem 0 0;font-size:0.88rem">
+      Kelola peran pengguna. Hanya admin yang dapat mengubah role.
+    </p>
+  </div>
+
+  {error && <div class="alert alert-error" role="alert" style="margin-bottom:1rem">{error}</div>}
+  {sukses && <div class="alert alert-success" role="status" style="margin-bottom:1rem">{sukses}</div>}
+
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th scope="col">Pengguna</th>
+          <th scope="col">Status</th>
+          <th scope="col">Daftar</th>
+          <th scope="col" style="text-align:right">Role</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((user) => (
+          <tr>
+            <td>
+              <div style="font-weight:600">{user.fullName ?? '—'}</div>
+              <div class="tertiary" style="font-size:0.75rem">{user.email}</div>
+            </td>
+            <td>
+              <Badge variant={user.status === 'active' ? 'success' : user.status === 'pending' ? 'warning' : 'danger'}>
+                {user.status}
+              </Badge>
+            </td>
+            <td class="tertiary" style="font-size:0.76rem">{formatDate(user.createdAt)}</td>
+            <td style="text-align:right">
+              {actor.role === 'admin' && user.id !== actor.id ? (
+                <div class="stack" style="gap:0.4rem;align-items:flex-end">
+                  <form method="POST" action={actions.admin.updateUserRole} class="row" style="justify-content:flex-end;gap:0.35rem">
+                    <input type="hidden" name="userId" value={user.id} />
+                    <select class="select" name="role" style="min-height:32px;padding:0.2rem 0.4rem;font-size:0.78rem;width:auto">
+                      <option value="alumni" selected={user.role === 'alumni'}>Alumni</option>
+                      <option value="editor" selected={user.role === 'editor'}>Editor</option>
+                      <option value="admin" selected={user.role === 'admin'}>Admin</option>
+                    </select>
+                    <button class="btn btn-secondary btn-sm" type="submit">Simpan</button>
+                  </form>
+                  <form
+                    method="POST"
+                    action={actions.admin.deleteUser}
+                    class="row"
+                    style="justify-content:flex-end;gap:0.35rem"
+                    onsubmit="return confirm('Anonimkan akun ini? Tindakan ini tidak dapat dibatalkan.')"
+                  >
+                    <input type="hidden" name="userId" value={user.id} />
+                    <label class="checkbox-row" style="font-size:0.72rem">
+                      <input type="checkbox" name="confirm" required />
+                      <span>Yakin</span>
+                    </label>
+                    <button class="btn btn-danger btn-sm" type="submit">Anonimkan</button>
+                  </form>
+                </div>
+              ) : (
+                <span class="badge">
+                  <Shield size={12} /> {user.role}
+                </span>
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+</AdminLayout>

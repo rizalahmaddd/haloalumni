@@ -1,0 +1,82 @@
+---
+import { desc, eq } from 'drizzle-orm';
+import { Heart } from '@lucide/astro';
+import AccountLayout from '../../layouts/AccountLayout.astro';
+import Badge from '../../components/ui/Badge.astro';
+import EmptyState from '../../components/ui/EmptyState.astro';
+import { donationCampaigns, donations, getDb } from '../../server/db';
+import { getSettings } from '../../server/settings';
+import { formatDate } from '../../server/format';
+import { formatRupiah } from '../../server/util';
+
+const settings = await getSettings();
+const user = Astro.locals.user!;
+
+const rows = await getDb()
+  .select({
+    id: donations.id,
+    amount: donations.amount,
+    status: donations.status,
+    createdAt: donations.createdAt,
+    campaignSlug: donationCampaigns.slug,
+    campaignTitle: donationCampaigns.title,
+  })
+  .from(donations)
+  .innerJoin(donationCampaigns, eq(donations.campaignId, donationCampaigns.id))
+  .where(eq(donations.donorUserId, user.id))
+  .orderBy(desc(donations.createdAt));
+
+const total = rows.filter((row) => row.status === 'verified').reduce((sum, row) => sum + row.amount, 0);
+const statusVariant: Record<string, 'success' | 'warning' | 'danger'> = {
+  verified: 'success',
+  pending: 'warning',
+  rejected: 'danger',
+};
+const statusLabel: Record<string, string> = {
+  verified: 'Terverifikasi',
+  pending: 'Menunggu verifikasi',
+  rejected: 'Ditolak',
+};
+---
+
+<AccountLayout settings={settings} title="Donasi saya" active="donasi">
+  <div class="spread wrap" style="margin-bottom:1.25rem">
+    <div>
+      <h1 class="section-title">Donasi saya</h1>
+      <p class="muted" style="margin:0.3rem 0 0;font-size:0.88rem">
+        Riwayat konfirmasi transfer dan status verifikasinya.
+      </p>
+    </div>
+    <div class="stat-tile" style="min-width:180px">
+      <div class="eyebrow">Total terverifikasi</div>
+      <div class="stat-value">{formatRupiah(total)}</div>
+    </div>
+  </div>
+
+  {
+    rows.length > 0 ? (
+      <div class="list-group">
+        {rows.map((row) => (
+          <a class="list-row" href={`/donasi/${row.campaignSlug}`}>
+            <Heart size={17} stroke-width={1.9} style="color:var(--success);flex:none" />
+            <div style="flex:1;min-width:0">
+              <strong style="font-size:0.92rem">{row.campaignTitle}</strong>
+              <div class="tertiary" style="font-size:0.78rem;margin-top:0.15rem">
+                {formatDate(row.createdAt)}
+              </div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-weight:650;font-size:0.9rem">{formatRupiah(row.amount)}</div>
+              <Badge variant={statusVariant[row.status]}>{statusLabel[row.status]}</Badge>
+            </div>
+          </a>
+        ))}
+      </div>
+    ) : (
+      <EmptyState title="Belum ada donasi" description="Dukung program alumni melalui kampanye yang sedang berjalan.">
+        <Heart size={24} stroke-width={1.6} style="color:var(--text-tertiary)" />
+        <a class="btn btn-secondary btn-sm" href="/donasi" style="margin-top:0.5rem">Lihat kampanye</a>
+      </EmptyState>
+    )
+  }
+</AccountLayout>

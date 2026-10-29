@@ -1,0 +1,109 @@
+---
+interface FilterField {
+  name: string;
+  label: string;
+  type?: 'text' | 'select' | 'number';
+  placeholder?: string;
+  options?: { value: string; label: string }[];
+}
+
+interface Props {
+  action: string;
+  values: Record<string, string | undefined>;
+  fields?: FilterField[];
+  searchPlaceholder?: string;
+  searchLabel?: string;
+}
+
+const {
+  action,
+  values,
+  fields = [],
+  searchPlaceholder = 'Cari…',
+  searchLabel = 'Kata kunci',
+} = Astro.props;
+
+const panelId = `filter-panel-${action.replace(/[^a-zA-Z0-9]/g, '') || 'default'}`;
+---
+
+<form method="get" action={action} style="margin-bottom:1.25rem" data-filter-form>
+  <button
+    type="button"
+    class="sheet-summary filter-toggle-btn"
+    aria-expanded="false"
+    aria-controls={panelId}
+    data-filter-toggle
+  >
+    <span>Filter pencarian</span>
+    <span aria-hidden="true">⌄</span>
+  </button>
+
+  <div class="filter-panel" id={panelId} data-filter-panel>
+    <div class="filter-grid">
+      <label class="field" style="grid-column:1 / -1">
+        <span class="label">{searchLabel}</span>
+        <input
+          class="input"
+          type="search"
+          name="q"
+          value={values.q ?? ''}
+          placeholder={searchPlaceholder}
+        />
+      </label>
+
+      {
+        fields.map((field) => (
+          <label class="field">
+            <span class="label">{field.label}</span>
+            {field.type === 'select' ? (
+              <select class="select" name={field.name}>
+                <option value="">Semua</option>
+                {field.options?.map((option) => (
+                  <option value={option.value} selected={values[field.name] === option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                class="input"
+                type={field.type ?? 'text'}
+                name={field.name}
+                value={values[field.name] ?? ''}
+                placeholder={field.placeholder}
+              />
+            )}
+          </label>
+        ))
+      }
+
+      {values.sort && <input type="hidden" name="sort" value={values.sort} />}
+    </div>
+
+    <div class="row wrap" style="margin-top:0.85rem">
+      <button class="btn btn-primary btn-sm" type="submit">Terapkan</button>
+      <a class="btn btn-ghost btn-sm" href={action}>Reset</a>
+    </div>
+  </div>
+</form>
+
+<script>
+  document.querySelectorAll<HTMLElement>('[data-filter-form]').forEach((form) => {
+    const toggle = form.querySelector<HTMLButtonElement>('[data-filter-toggle]');
+    const panel = form.querySelector<HTMLElement>('[data-filter-panel]');
+    if (!toggle || !panel) return;
+
+    const mobile = window.matchMedia('(max-width: 767px)');
+    const sync = (open: boolean) => {
+      toggle.setAttribute('aria-expanded', String(open));
+      panel.dataset.open = String(open);
+    };
+
+    sync(!mobile.matches);
+    toggle.addEventListener('click', () => sync(toggle.getAttribute('aria-expanded') !== 'true'));
+    mobile.addEventListener('change', () => {
+      panel.dataset.open = String(!mobile.matches);
+      toggle.setAttribute('aria-expanded', String(!mobile.matches));
+    });
+  });
+</script>

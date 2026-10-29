@@ -1,0 +1,72 @@
+---
+import { Building, Clock, MapPin, Star } from '@lucide/astro';
+import Badge from '../ui/Badge.astro';
+import { formatDateShort } from '../../server/format';
+import { formatRupiah } from '../../server/util';
+
+interface Props {
+  job: {
+    slug: string;
+    title: string;
+    company: string;
+    location: string | null;
+    workMode: 'onsite' | 'hybrid' | 'remote';
+    employmentType: 'full' | 'part' | 'contract' | 'internship' | 'freelance';
+    salaryMin: number | null;
+    salaryMax: number | null;
+    featured: boolean;
+    publishedAt: number | null;
+    expiresAt: number | null;
+    status: string;
+  };
+}
+
+const { job } = Astro.props;
+const typeLabel: Record<string, string> = {
+  full: 'Full-time',
+  part: 'Part-time',
+  contract: 'Kontrak',
+  internship: 'Magang',
+  freelance: 'Freelance',
+};
+const modeLabel: Record<string, string> = { onsite: 'Onsite', hybrid: 'Hybrid', remote: 'Remote' };
+const expired = job.expiresAt != null && job.expiresAt < Date.now();
+const salary =
+  job.salaryMin || job.salaryMax
+    ? `${job.salaryMin ? formatRupiah(job.salaryMin) : '—'} – ${job.salaryMax ? formatRupiah(job.salaryMax) : '—'}`
+    : 'Gaji tidak ditampilkan';
+---
+
+<a class="list-row" href={`/loker/${job.slug}`} style="align-items:flex-start">
+  <div
+    style="width:44px;height:44px;border-radius:12px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;flex:none"
+  >
+    <Building size={20} stroke-width={1.7} />
+  </div>
+  <div style="min-width:0;flex:1">
+    <div class="row wrap" style="gap:0.4rem">
+      <strong style="font-size:0.97rem">{job.title}</strong>
+      {job.featured && <Star size={14} stroke-width={2} style="color:#d97706" />}
+      {expired && <Badge variant="danger">Ditutup</Badge>}
+    </div>
+    <p class="muted" style="margin:0.12rem 0 0;font-size:0.85rem">{job.company}</p>
+    <div class="meta-row" style="margin-top:0.35rem;gap:0.3rem 0.7rem">
+      <span class="badge">{typeLabel[job.employmentType] ?? job.employmentType}</span>
+      <span class="badge">{modeLabel[job.workMode] ?? job.workMode}</span>
+      {
+        job.location && (
+          <span class="meta-item">
+            <MapPin size={13} stroke-width={1.8} /> {job.location}
+          </span>
+        )
+      }
+      <span class="meta-item">
+        <Clock size={13} stroke-width={1.8} />
+        {job.publishedAt ? formatDateShort(job.publishedAt) : 'Baru'}
+      </span>
+    </div>
+  </div>
+  <div class="hide-mobile" style="text-align:right;flex:none">
+    <span style="font-size:0.82rem;font-weight:600;color:var(--text-secondary)">{salary}</span>
+  </div>
+</a>

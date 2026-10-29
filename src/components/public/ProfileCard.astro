@@ -1,0 +1,59 @@
+---
+import { Building, MapPin } from '@lucide/astro';
+import Avatar from '../ui/Avatar.astro';
+import Badge from '../ui/Badge.astro';
+
+interface Props {
+  profile: {
+    slug: string;
+    fullName: string;
+    angkatan: number;
+    program: string | null;
+    photoKey: string | null;
+    city: string | null;
+    company: string | null;
+    jobTitle: string | null;
+    industry: string | null;
+    verifiedAt: number | null;
+    showWorkplace: boolean;
+  };
+  yearLabel: string;
+}
+
+const { profile, yearLabel } = Astro.props;
+const workplace =
+  profile.showWorkplace && (profile.jobTitle || profile.company)
+    ? [profile.jobTitle, profile.company].filter(Boolean).join(' · ')
+    : null;
+---
+
+<a class="card card-hover profile-card" href={`/direktori/${profile.slug}`} style="display:block;padding:1.1rem">
+  <div class="row" style="align-items:flex-start;gap:0.85rem">
+    <Avatar src={profile.photoKey} name={profile.fullName} size="lg" />
+    <div style="min-width:0;flex:1">
+      <div class="row wrap" style="gap:0.4rem">
+        <strong style="font-size:0.98rem;letter-spacing:-0.01em">{profile.fullName}</strong>
+        {profile.verifiedAt && <Badge variant="accent">Terverifikasi</Badge>}
+      </div>
+      <p class="muted" style="margin:0.15rem 0 0;font-size:0.84rem">
+        {yearLabel} {profile.angkatan}{profile.program ? ` · ${profile.program}` : ''}
+      </p>
+      {
+        workplace && (
+          <p class="meta-item" style="margin:0.45rem 0 0;font-size:0.83rem;color:var(--text-secondary)">
+            <Building size={14} stroke-width={1.8} />
+            <span class="clamp-2">{workplace}</span>
+          </p>
+        )
+      }
+      {
+        profile.city && (
+          <p class="meta-item" style="margin:0.25rem 0 0;font-size:0.8rem;color:var(--text-tertiary)">
+            <MapPin size={13} stroke-width={1.8} />
+            {profile.city}
+          </p>
+        )
+      }
+    </div>
+  </div>
+</a>

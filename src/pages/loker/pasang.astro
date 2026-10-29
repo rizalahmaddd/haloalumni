@@ -1,0 +1,122 @@
+---
+import { actions } from 'astro:actions';
+import { ArrowLeft, Send } from '@lucide/astro';
+import PublicLayout from '../../layouts/PublicLayout.astro';
+import Turnstile from '../../components/ui/Turnstile.astro';
+import { getSettings } from '../../server/settings';
+
+const settings = await getSettings();
+const user = Astro.locals.user;
+const error = Astro.url.searchParams.get('error');
+const sukses = Astro.url.searchParams.get('sukses');
+---
+
+<PublicLayout
+  settings={settings}
+  active="pasang"
+  title="Pasang Loker"
+  description="Kirim informasi lowongan kerja untuk dimoderasi dan dipublikasikan di jaringan alumni."
+>
+  <div class="public-container" style="max-width:760px;padding-top:2rem;padding-bottom:2rem">
+    <a class="btn btn-ghost btn-sm" href="/loker" style="margin-bottom:1rem">
+      <ArrowLeft size={15} stroke-width={2} /> Semua loker
+    </a>
+
+    <h1 class="page-title">Pasang loker</h1>
+    <p class="muted" style="margin:0.5rem 0 1.25rem;font-size:0.95rem">
+      Loker akan ditinjau admin sebelum tayang. Masa aktif default {settings['jobs.duration_days']} hari.
+    </p>
+
+    {error && <div class="alert alert-error" role="alert" style="margin-bottom:1rem">{error}</div>}
+    {sukses && <div class="alert alert-success" role="status" style="margin-bottom:1rem">{sukses}</div>}
+
+    <form method="POST" action={actions.jobs.submit} class="glass-panel stack" style="padding:1.4rem;gap:0.9rem">
+      <div class="grid-2" style="gap:0.75rem">
+        <div class="field">
+          <label class="label" for="title">Posisi</label>
+          <input class="input" id="title" name="title" required maxlength="160" />
+        </div>
+        <div class="field">
+          <label class="label" for="company">Perusahaan</label>
+          <input class="input" id="company" name="company" required maxlength="120" />
+        </div>
+      </div>
+
+      <div class="grid-2" style="gap:0.75rem">
+        <div class="field">
+          <label class="label" for="location">Lokasi</label>
+          <input class="input" id="location" name="location" maxlength="120" placeholder="Jakarta / Remote" />
+        </div>
+        <div class="field">
+          <label class="label" for="category">Kategori</label>
+          <input class="input" id="category" name="category" maxlength="80" placeholder="Teknologi, Desain…" />
+        </div>
+      </div>
+
+      <div class="grid-2" style="gap:0.75rem">
+        <div class="field">
+          <label class="label" for="workMode">Mode kerja</label>
+          <select class="select" id="workMode" name="workMode" required>
+            <option value="onsite">Onsite</option>
+            <option value="hybrid">Hybrid</option>
+            <option value="remote">Remote</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="label" for="employmentType">Tipe kerja</label>
+          <select class="select" id="employmentType" name="employmentType" required>
+            <option value="full">Full-time</option>
+            <option value="part">Part-time</option>
+            <option value="contract">Kontrak</option>
+            <option value="internship">Magang</option>
+            <option value="freelance">Freelance</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="label" for="description">Deskripsi</label>
+        <textarea
+          class="textarea"
+          id="description"
+          name="description"
+          required
+          minlength="30"
+          maxlength="8000"
+          rows="10"
+          placeholder="Tanggung jawab, kualifikasi, cara melamar…"
+        />
+      </div>
+
+      <div class="field">
+        <label class="label" for="applyUrl">URL lamaran</label>
+        <input class="input" id="applyUrl" name="applyUrl" type="url" maxlength="500" placeholder="https://…" />
+        <span class="hint">Isi URL atau email kontak, salah satu wajib.</span>
+      </div>
+
+      <div class="field">
+        <label class="label" for="contactEmail">Email kontak</label>
+        <input class="input" id="contactEmail" name="contactEmail" type="email" maxlength="200" />
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="grid-2" style="gap:0.75rem">
+        <div class="field">
+          <label class="label" for="submitterName">Nama pengirim</label>
+          <input class="input" id="submitterName" name="submitterName" maxlength="120" value={user?.profile?.fullName ?? ''} />
+        </div>
+        <div class="field">
+          <label class="label" for="submitterEmail">Email pengirim</label>
+          <input class="input" id="submitterEmail" name="submitterEmail" type="email" maxlength="200" value={user?.email ?? ''} />
+        </div>
+      </div>
+
+      <Turnstile />
+
+      <button class="btn btn-primary btn-lg" type="submit">
+        <Send size={17} stroke-width={1.9} /> Kirim untuk moderasi
+      </button>
+    </form>
+  </div>
+</PublicLayout>

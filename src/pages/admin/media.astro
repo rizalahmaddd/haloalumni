@@ -1,0 +1,70 @@
+---
+import { actions } from 'astro:actions';
+import { desc } from 'drizzle-orm';
+import { Trash } from '@lucide/astro';
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import MediaUploader from '../../components/admin/MediaUploader';
+import EmptyState from '../../components/ui/EmptyState.astro';
+import { getDb, media } from '../../server/db';
+import { getSettings } from '../../server/settings';
+import { mediaUrl } from '../../server/storage/r2';
+import { formatDate } from '../../server/format';
+
+const settings = await getSettings();
+const rows = await getDb().select().from(media).orderBy(desc(media.createdAt)).limit(120);
+const sukses = Astro.url.searchParams.get('sukses');
+const error = Astro.url.searchParams.get('error');
+---
+
+<AdminLayout settings={settings} title="Media">
+  <div class="spread wrap" style="margin-bottom:1.25rem">
+    <div>
+      <h1 class="section-title">Media</h1>
+      <p class="muted" style="margin:0.3rem 0 0;font-size:0.88rem">
+        Pustaka gambar untuk sampul, foto profil, dan logo. Maks 3MB per gambar.
+      </p>
+    </div>
+    <MediaUploader client:load />
+  </div>
+
+  {error && <div class="alert alert-error" role="alert" style="margin-bottom:1rem">{error}</div>}
+  {sukses && <div class="alert alert-success" role="status" style="margin-bottom:1rem">{sukses}</div>}
+
+  {
+    rows.length > 0 ? (
+      <div class="media-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:0.9rem">
+        {rows.map((item) => (
+          <div class="solid-panel" style="overflow:hidden">
+            <img
+              src={mediaUrl(item.key) ?? ''}
+              alt={item.alt ?? item.filename}
+              loading="lazy"
+              style="width:100%;height:130px;object-fit:cover;background:var(--surface-raised)"
+            />
+            <div style="padding:0.6rem 0.7rem">
+              <div style="font-size:0.78rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+                {item.filename}
+              </div>
+              <div class="tertiary" style="font-size:0.68rem">
+                {(item.size / 1024).toFixed(0)} KB · {formatDate(item.createdAt)}
+              </div>
+              <form method="POST" action={actions.admin.deleteMedia} style="margin-top:0.45rem">
+                <input type="hidden" name="id" value={item.id} />
+                <button
+                  class="btn btn-ghost btn-sm"
+                  type="submit"
+                  onclick="return confirm('Hapus media ini dari daftar?')"
+                  style="color:var(--danger)"
+                >
+                  <Trash size={13} stroke-width={1.9} /> Hapus
+                </button>
+              </form>
+            </div>
+          </div>
+        ))}
+      </div>
+    ) : (
+      <EmptyState title="Belum ada media" description="Unggah gambar untuk mulai membangun pustaka media." />
+    )
+  }
+</AdminLayout>

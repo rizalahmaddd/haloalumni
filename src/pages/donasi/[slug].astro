@@ -1,0 +1,258 @@
+---
+import { and, desc, eq, sql } from 'drizzle-orm';
+import { ArrowLeft, Heart, ShieldCheck, Upload, Wallet } from '@lucide/astro';
+import PublicLayout from '../../layouts/PublicLayout.astro';
+import Badge from '../../components/ui/Badge.astro';
+import Turnstile from '../../components/ui/Turnstile.astro';
+import { donationCampaigns, donations, getDb } from '../../server/db';
+import { getSettings } from '../../server/settings';
+import { formatDate } from '../../server/format';
+import { formatNumber, formatRupiah } from '../../server/util';
+import { mediaUrl } from '../../server/storage/r2';
+
+const { slug } = Astro.params;
+const settings = await getSettings();
+const db = getDb();
+
+const [campaign] = await db
+  .select()
+  .from(donationCampaigns)
+  .where(eq(donationCampaigns.slug, slug ?? ''))
+  .limit(1);
+
+const cover = mediaUrl(campaign?.coverKey);
+const visible = campaign && (campaign.status !== 'draft' || Astro.locals.user?.role === 'admin');
+if (!campaign || !visible) Astro.response.status = 404;
+
+const [summaryRows, donorRows] = campaign
+  ? await Promise.all([
+      db
+        .select({
+          collected: sql<number>`coalesce(sum(${donations.amount}), 0)`,
+          count: sql<number>`count(*)`,
+        })
+        .from(donations)
+        .where(and(eq(donations.campaignId, campaign.id), eq(donations.status, 'verified'))),
+      db
+        .select({
+          donorName: donations.donorName,
+          amount: donations.amount,
+          message: donations.message,
+          isAnonymous: donations.isAnonymous,
+          createdAt: donations.createdAt,
+        })
+        .from(donations)
+        .where(and(eq(donations.campaignId, campaign.id), eq(donations.status, 'verified')))
+        .orderBy(desc(donations.createdAt))
+        .limit(30),
+    ])
+  : [[{ collected: 0, count: 0 }], []];
+
+const collected = Number(summaryRows[0]?.collected ?? 0);
+const donorCount = Number(summaryRows[0]?.count ?? 0);
+const percent = campaign && campaign.targetAmount > 0 ? Math.min(100, Math.round((collected / campaign.targetAmount) * 100)) : 0;
+const closed = campaign?.status !== 'active' || (campaign?.deadline != null && campaign.deadline < Date.now());
+const feedback = Astro.url.searchParams.get('sukses') ?? Astro.url.searchParams.get('error');
+const feedbackType = Astro.url.searchParams.get('error') ? 'error' : 'success';
+const user = Astro.locals.user;
+---
+
+<PublicLayout settings={settings} active="donasi" title={campaign ? campaign.title : 'Donasi'} noindex={!visible}>
+  {
+    !campaign || !visible ? (
+      <div class="public-container" style="padding:4rem 1rem">
+        <p class="eyebrow">404</p>
+        <h1 class="page-title" style="margin-top:0.4rem">Kampanye tidak ditemukan</h1>
+        <a class="btn btn-secondary" href="/donasi" style="margin-top:1rem">
+          <ArrowLeft size={16} /> Semua donasi
+        </a>
+      </div>
+    ) : (
+      <div class="public-container" style="padding-top:1.75rem;padding-bottom:2rem">
+        <a class="btn btn-ghost btn-sm" href="/donasi" style="margin-bottom:1rem">
+          <ArrowLeft size={15} stroke-width={2} /> Donasi
+        </a>
+
+        {feedback && (
+          <div class:list={['alert', feedbackType === 'error' ? 'alert-error' : 'alert-success']} style="margin-bottom:1rem">
+            {feedback}
+          </div>
+        )}
+
+        <div class="grid-2" style="grid-template-columns:minmax(0,1fr) 360px;align-items:start">
+          <div class="stack">
+            <article class="solid-panel" style="padding:1.5rem">
+              {cover && (
+                <img
+                  src={cover}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  style="width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:14px;margin-bottom:1.1rem"
+                />
+              )}
+              <div class="row wrap" style="gap:0.5rem">
+                <Badge variant={campaign.status === 'active' ? 'success' : 'default'}>
+                  {campaign.status === 'active' ? 'Aktif' : campaign.status === 'closed' ? 'Selesai' : 'Draft'}
+                </Badge>
+                {campaign.deadline && <Badge>Hingga {formatDate(campaign.deadline)}</Badge>}
+              </div>
+
+              <h1 class="section-title" style="margin-top:0.75rem;font-size:clamp(1.7rem,1.4rem + 1.4vw,2.3rem)">
+                {campaign.title}
+              </h1>
+
+              <div style="margin-top:1.25rem">
+                <div class="progress" role="progressbar" aria-label="Dana terkumpul" aria-valuenow={percent} aria-valuemin="0" aria-valuemax="100">
+                  <span style={`width:${percent}%`}></span>
+                </div>
+                <div class="spread wrap" style="margin-top:0.5rem;font-size:0.86rem">
+                  <strong>{formatRupiah(collected)} terkumpul</strong>
+                  <span class="tertiary">{percent}% dari {formatRupiah(campaign.targetAmount)}</span>
+                </div>
+                <p class="tertiary" style="font-size:0.78rem;margin:0.25rem 0 0">
+                  {formatNumber(donorCount)} donasi terverifikasi
+                </p>
+              </div>
+
+              <hr class="divider" style="margin:1.25rem 0" />
+              <div class="prose-content" set:html={campaign.descriptionHtml} />
+            </article>
+
+            <section class="solid-panel" style="padding:1.35rem">
+              <h2 class="section-title" style="font-size:1.05rem">Donatur</h2>
+              {
+                donorRows.length > 0 ? (
+                  <div style="margin-top:0.75rem">
+                    {donorRows.map((donor) => (
+                      <div class="list-row" style="align-items:flex-start;padding:0.7rem 0">
+                        <span
+                          style="width:34px;height:34px;border-radius:50%;background:var(--success-soft);color:var(--success);display:flex;align-items:center;justify-content:center;flex:none"
+                        >
+                          <Heart size={15} stroke-width={1.9} />
+                        </span>
+                        <div style="flex:1;min-width:0">
+                          <div class="spread wrap" style="gap:0.4rem">
+                            <strong style="font-size:0.88rem">
+                              {donor.isAnonymous ? 'Alumni' : donor.donorName}
+                            </strong>
+                            <span class="tertiary" style="font-size:0.78rem">{formatRupiah(donor.amount)}</span>
+                          </div>
+                          {donor.message && (
+                            <p class="muted" style="margin:0.2rem 0 0;font-size:0.82rem">{donor.message}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p class="muted" style="font-size:0.86rem;margin:0.5rem 0 0">
+                    Jadilah donatur pertama untuk kampanye ini.
+                  </p>
+                )
+              }
+            </section>
+          </div>
+
+          <aside class="stack" style="position:sticky;top:calc(var(--toolbar-height) + 1rem)">
+            <div class="glass-panel" style="padding:1.25rem">
+              <div class="row" style="gap:0.5rem;font-weight:650">
+                <Wallet size={17} stroke-width={1.9} /> Rekening donasi
+              </div>
+              <p class="muted" style="font-size:0.85rem;margin:0.5rem 0 0;white-space:pre-wrap;line-height:1.6">
+                {campaign.bankInfo ?? 'Informasi rekening belum tersedia.'}
+              </p>
+
+              <div class="divider" style="margin:0.9rem 0" />
+
+              {closed ? (
+                <p class="muted" style="font-size:0.85rem;margin:0">
+                  Kampanye ini sudah ditutup. Terima kasih atas dukungan Anda.
+                </p>
+              ) : (
+                <details class="filter-details" open>
+                  <summary class="sheet-summary">Konfirmasi transfer</summary>
+                  <form
+                    method="POST"
+                    action="/api/donasi/konfirmasi"
+                    enctype="multipart/form-data"
+                    class="stack"
+                    style="gap:0.6rem;margin-top:0.8rem"
+                  >
+                    <input type="hidden" name="campaignId" value={campaign.id} />
+                    <div class="field">
+                      <label class="label" for="donorName">Nama donatur</label>
+                      <input
+                        class="input"
+                        id="donorName"
+                        name="donorName"
+                        required
+                        maxlength="120"
+                        value={user?.profile?.fullName ?? ''}
+                      />
+                    </div>
+                    <div class="field">
+                      <label class="label" for="donorEmail">Email</label>
+                      <input
+                        class="input"
+                        id="donorEmail"
+                        name="email"
+                        type="email"
+                        required
+                        value={user?.email ?? ''}
+                      />
+                    </div>
+                    <div class="grid-2" style="gap:0.6rem">
+                      <div class="field">
+                        <label class="label" for="amount">Nominal (Rp)</label>
+                        <input class="input" id="amount" name="amount" inputmode="numeric" required placeholder="100000" />
+                      </div>
+                      <div class="field">
+                        <label class="label" for="transferDate">Tanggal transfer</label>
+                        <input class="input" id="transferDate" name="transferDate" type="date" />
+                      </div>
+                    </div>
+                    <div class="field">
+                      <label class="label" for="message">Pesan</label>
+                      <textarea class="textarea" id="message" name="message" maxlength="500" rows="2" />
+                    </div>
+                    <div class="field">
+                      <label class="label" for="proof">Bukti transfer</label>
+                      <input
+                        class="input"
+                        id="proof"
+                        name="proof"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,application/pdf"
+                        style="padding:0.5rem"
+                      />
+                      <span class="hint">JPG/PNG/WebP/PDF, maks 5MB. Hanya terlihat oleh admin.</span>
+                    </div>
+                    <label class="checkbox-row">
+                      <input type="checkbox" name="isAnonymous" />
+                      <span>Tampilkan sebagai anonim di daftar donatur</span>
+                    </label>
+                    <Turnstile />
+                    <button class="btn btn-primary btn-block" type="submit">
+                      <Upload size={16} stroke-width={1.9} /> Kirim konfirmasi
+                    </button>
+                  </form>
+                </details>
+              )}
+            </div>
+
+            <div class="solid-panel" style="padding:1.1rem">
+              <div class="row" style="gap:0.4rem;font-size:0.82rem;color:var(--text-secondary)">
+                <ShieldCheck size={15} stroke-width={1.9} />
+                Diverifikasi manual oleh admin
+              </div>
+              <p class="tertiary" style="font-size:0.78rem;margin:0.35rem 0 0">
+                Donasi baru tampil di halaman setelah bukti transfer diverifikasi.
+              </p>
+            </div>
+          </aside>
+        </div>
+      </div>
+    )
+  }
+</PublicLayout>

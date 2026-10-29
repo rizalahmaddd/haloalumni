@@ -1,0 +1,20 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getSettings } from '../server/settings';
+
+const settings = await getSettings();
+Astro.response.status = 503;
+Astro.response.headers.set('Retry-After', '300');
+---
+
+<BaseLayout settings={settings} title="Sedang dalam perawatan" noindex>
+  <main id="konten" class="public-container" style="padding:4.5rem 0 5rem;text-align:center">
+    <p class="eyebrow" style="margin:0">{settings['site.name']}</p>
+    <h1 class="section-title" style="margin:0.5rem 0 0;font-size:clamp(1.8rem,1.4rem + 1.6vw,2.6rem)">
+      Sedang dalam perawatan
+    </h1>
+    <p class="muted" style="max-width:48ch;margin:0.75rem auto 0">
+      {settings['site.maintenance_message']}
+    </p>
+  </main>
+</BaseLayout>

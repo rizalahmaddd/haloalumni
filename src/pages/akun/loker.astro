@@ -1,0 +1,126 @@
+---
+import { desc, eq } from 'drizzle-orm';
+import { Bookmark, Briefcase, Plus } from '@lucide/astro';
+import AccountLayout from '../../layouts/AccountLayout.astro';
+import Badge from '../../components/ui/Badge.astro';
+import EmptyState from '../../components/ui/EmptyState.astro';
+import { getDb, jobBookmarks, jobs } from '../../server/db';
+import { getSettings } from '../../server/settings';
+import { formatDate } from '../../server/format';
+
+const settings = await getSettings();
+const user = Astro.locals.user!;
+const db = getDb();
+
+const [submitted, saved] = await Promise.all([
+  db
+    .select()
+    .from(jobs)
+    .where(eq(jobs.submittedByUserId, user.id))
+    .orderBy(desc(jobs.createdAt)),
+  db
+    .select({
+      id: jobs.id,
+      slug: jobs.slug,
+      title: jobs.title,
+      company: jobs.company,
+      location: jobs.location,
+      status: jobs.status,
+      expiresAt: jobs.expiresAt,
+    })
+    .from(jobBookmarks)
+    .innerJoin(jobs, eq(jobBookmarks.jobId, jobs.id))
+    .where(eq(jobBookmarks.userId, user.id))
+    .orderBy(desc(jobBookmarks.createdAt)),
+]);
+
+const statusVariant: Record<string, 'success' | 'warning' | 'danger' | 'default'> = {
+  published: 'success',
+  pending: 'warning',
+  rejected: 'danger',
+  expired: 'default',
+  draft: 'default',
+};
+const statusLabel: Record<string, string> = {
+  published: 'Terbit',
+  pending: 'Menunggu moderasi',
+  rejected: 'Ditolak',
+  expired: 'Kedaluwarsa',
+  draft: 'Draft',
+};
+---
+
+<AccountLayout settings={settings} title="Loker saya" active="loker">
+  <div class="spread wrap" style="margin-bottom:1.25rem">
+    <div>
+      <h1 class="section-title">Loker saya</h1>
+      <p class="muted" style="margin:0.3rem 0 0;font-size:0.88rem">
+        Pantau loker yang Anda kirim dan yang Anda simpan.
+      </p>
+    </div>
+    <a class="btn btn-primary btn-sm" href="/loker/pasang">
+      <Plus size={15} stroke-width={2} /> Pasang loker
+    </a>
+  </div>
+
+  <section class="stack" style="gap:0.85rem">
+    <h2 class="section-title" style="font-size:1.05rem">Dikirim oleh saya</h2>
+    {
+      submitted.length > 0 ? (
+        <div class="list-group">
+          {submitted.map((job) => (
+            <div class="list-row">
+              <Briefcase size={17} stroke-width={1.8} style="color:var(--text-tertiary);flex:none" />
+              <div style="flex:1;min-width:0">
+                <div class="row wrap" style="gap:0.4rem">
+                  <a href={`/loker/${job.slug}`} style="font-weight:600;font-size:0.92rem">{job.title}</a>
+                  <Badge variant={statusVariant[job.status]}>{statusLabel[job.status]}</Badge>
+                </div>
+                <div class="tertiary" style="font-size:0.78rem;margin-top:0.15rem">
+                  {job.company} · dikirim {formatDate(job.createdAt)}
+                </div>
+                {job.moderatorNote && (
+                  <p class="muted" style="font-size:0.78rem;margin:0.25rem 0 0">Catatan: {job.moderatorNote}</p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <EmptyState title="Belum ada loker yang dikirim" description="Bantu jaringan alumni dengan membagikan peluang kerja.">
+          <Briefcase size={24} stroke-width={1.6} style="color:var(--text-tertiary)" />
+        </EmptyState>
+      )
+    }
+  </section>
+
+  <section class="stack" style="gap:0.85rem;margin-top:2rem">
+    <h2 class="section-title" style="font-size:1.05rem">Disimpan</h2>
+    {
+      saved.length > 0 ? (
+        <div class="list-group">
+          {saved.map((job) => (
+            <a class="list-row" href={`/loker/${job.slug}`}>
+              <Bookmark size={17} stroke-width={1.8} style="color:var(--accent);flex:none" />
+              <div style="flex:1;min-width:0">
+                <strong style="font-size:0.92rem">{job.title}</strong>
+                <div class="tertiary" style="font-size:0.78rem;margin-top:0.15rem">
+                  {job.company}{job.location ? ` · ${job.location}` : ''}
+                </div>
+              </div>
+              {job.expiresAt && job.expiresAt < Date.now() ? (
+                <Badge variant="danger">Ditutup</Badge>
+              ) : (
+                <Badge variant="success">Aktif</Badge>
+              )}
+            </a>
+          ))}
+        </div>
+      ) : (
+        <EmptyState title="Belum ada loker tersimpan" description="Simpan loker dari halaman detail untuk dibuka lagi nanti.">
+          <Bookmark size={24} stroke-width={1.6} style="color:var(--text-tertiary)" />
+        </EmptyState>
+      )
+    }
+  </section>
+</AccountLayout>

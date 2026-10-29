@@ -1,0 +1,191 @@
+---
+import { Palette, X } from '@lucide/astro';
+---
+
+<div class="appearance" data-appearance>
+  <button
+    type="button"
+    class="icon-btn"
+    aria-label="Pengaturan tampilan"
+    aria-expanded="false"
+    aria-controls="appearance-panel"
+    data-appearance-trigger
+  >
+    <Palette size={18} stroke-width={1.75} />
+  </button>
+
+  <div
+    class="appearance-panel glass-thick"
+    id="appearance-panel"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Pengaturan tampilan"
+    data-appearance-panel
+    hidden
+  >
+    <div class="spread" style="margin-bottom:0.9rem">
+      <strong style="font-size:0.9rem">Tampilan</strong>
+      <button type="button" class="icon-btn" aria-label="Tutup" data-appearance-close>
+        <X size={15} />
+      </button>
+    </div>
+
+    <div class="field" style="gap:0.45rem">
+      <span class="label">Tema</span>
+      <div class="segmented" role="group" aria-label="Tema">
+        <button type="button" class="segment" data-theme-value="system" aria-pressed="true">Sistem</button>
+        <button type="button" class="segment" data-theme-value="light" aria-pressed="false">Terang</button>
+        <button type="button" class="segment" data-theme-value="dark" aria-pressed="false">Gelap</button>
+      </div>
+    </div>
+
+    <div class="field" style="gap:0.45rem;margin-top:0.9rem">
+      <div class="spread">
+        <label class="label" for="glass-tint">Intensitas Liquid Glass</label>
+        <span class="tertiary" style="font-size:0.75rem" data-tint-label>Seimbang</span>
+      </div>
+      <input
+        id="glass-tint"
+        type="range"
+        min="0.45"
+        max="0.95"
+        step="0.05"
+        value="0.68"
+        class="range"
+        data-tint
+      />
+    </div>
+
+    <label class="checkbox-row" style="margin-top:0.9rem">
+      <input type="checkbox" data-reduced />
+      <span>Kurangi transparansi</span>
+    </label>
+  </div>
+</div>
+
+<script>
+  const THEME_KEY = 'alumni.theme';
+  const GLASS_KEY = 'alumni.glass';
+  const REDUCED_KEY = 'alumni.reducedTransparency';
+
+  function readStored() {
+    try {
+      return {
+        theme: localStorage.getItem(THEME_KEY) ?? 'system',
+        tint: Number(localStorage.getItem(GLASS_KEY)),
+        reduced: localStorage.getItem(REDUCED_KEY) === 'true',
+      };
+    } catch {
+      return { theme: 'system', tint: Number.NaN, reduced: false };
+    }
+  }
+
+  function tintLabel(value: number): string {
+    return value <= 0.55 ? 'Jernih' : value >= 0.86 ? 'Berkaca' : 'Seimbang';
+  }
+
+  document.querySelectorAll<HTMLElement>('[data-appearance]').forEach((root) => {
+    const trigger = root.querySelector<HTMLButtonElement>('[data-appearance-trigger]');
+    const panel = root.querySelector<HTMLElement>('[data-appearance-panel]');
+    if (!trigger || !panel) return;
+
+    const panelEl = panel;
+    const triggerEl = trigger;
+    const closeButton = panelEl.querySelector<HTMLButtonElement>('[data-appearance-close]');
+    const themeButtons = [...panelEl.querySelectorAll<HTMLButtonElement>('[data-theme-value]')];
+    const tintInput = panelEl.querySelector<HTMLInputElement>('[data-tint]');
+    const tintLabelEl = panelEl.querySelector<HTMLElement>('[data-tint-label]');
+    const reducedInput = panelEl.querySelector<HTMLInputElement>('[data-reduced]');
+    const stored = readStored();
+    let lastFocus: HTMLElement | null = null;
+
+    const tint = Number.isFinite(stored.tint) && stored.tint >= 0.4 && stored.tint <= 1 ? stored.tint : 0.68;
+
+    themeButtons.forEach((button) => {
+      button.setAttribute('aria-pressed', String(button.dataset.themeValue === stored.theme));
+    });
+    if (tintInput) tintInput.value = String(tint);
+    if (tintLabelEl) tintLabelEl.textContent = tintLabel(tint);
+    if (reducedInput) reducedInput.checked = stored.reduced;
+
+    function open() {
+      lastFocus = document.activeElement as HTMLElement | null;
+      panelEl.hidden = false;
+      triggerEl.setAttribute('aria-expanded', 'true');
+      closeButton?.focus();
+      document.addEventListener('keydown', onKeyDown);
+    }
+
+    function close() {
+      panelEl.hidden = true;
+      triggerEl.setAttribute('aria-expanded', 'false');
+      document.removeEventListener('keydown', onKeyDown);
+      lastFocus?.focus();
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        close();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = [...panelEl.querySelectorAll<HTMLElement>('button, input')].filter(
+        (element) => !element.hasAttribute('disabled'),
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    triggerEl.addEventListener('click', () => {
+      if (panelEl.hidden) open();
+      else close();
+    });
+    closeButton?.addEventListener('click', close);
+    document.addEventListener('mousedown', (event) => {
+      if (!panelEl.hidden && !root.contains(event.target as Node)) close();
+    });
+
+    themeButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        const theme = button.dataset.themeValue ?? 'system';
+        if (theme === 'system') delete document.documentElement.dataset.theme;
+        else document.documentElement.dataset.theme = theme;
+        themeButtons.forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
+        try {
+          localStorage.setItem(THEME_KEY, theme);
+        } catch {
+          /* storage unavailable */
+        }
+      });
+    });
+
+    tintInput?.addEventListener('input', () => {
+      const value = Number(tintInput.value);
+      document.documentElement.style.setProperty('--glass-tint', String(value));
+      if (tintLabelEl) tintLabelEl.textContent = tintLabel(value);
+      try {
+        localStorage.setItem(GLASS_KEY, String(value));
+      } catch {
+        /* storage unavailable */
+      }
+    });
+
+    reducedInput?.addEventListener('change', () => {
+      document.documentElement.dataset.reducedTransparency = String(reducedInput.checked);
+      try {
+        localStorage.setItem(REDUCED_KEY, String(reducedInput.checked));
+      } catch {
+        /* storage unavailable */
+      }
+    });
+  });
+</script>

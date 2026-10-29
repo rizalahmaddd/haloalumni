@@ -1,0 +1,102 @@
+---
+import { and, desc, eq, sql } from 'drizzle-orm';
+import { Heart } from '@lucide/astro';
+import PublicLayout from '../../layouts/PublicLayout.astro';
+import DonationCard from '../../components/public/DonationCard.astro';
+import EmptyState from '../../components/ui/EmptyState.astro';
+import Badge from '../../components/ui/Badge.astro';
+import { donationCampaigns, donations, getDb } from '../../server/db';
+import { getSettings } from '../../server/settings';
+import { formatDate } from '../../server/format';
+import { formatRupiah } from '../../server/util';
+
+const settings = await getSettings();
+const db = getDb();
+
+const rows = await db
+  .select({
+    id: donationCampaigns.id,
+    slug: donationCampaigns.slug,
+    title: donationCampaigns.title,
+    targetAmount: donationCampaigns.targetAmount,
+    deadline: donationCampaigns.deadline,
+    status: donationCampaigns.status,
+    collected: sql<number>`coalesce(sum(${donations.amount}), 0)`,
+  })
+  .from(donationCampaigns)
+  .leftJoin(donations, and(eq(donations.campaignId, donationCampaigns.id), eq(donations.status, 'verified')))
+  .groupBy(donationCampaigns.id)
+  .orderBy(desc(donationCampaigns.createdAt));
+
+const active = rows.filter((row) => row.status === 'active');
+const closed = rows.filter((row) => row.status !== 'active');
+const totalCollected = rows.reduce((sum, row) => sum + Number(row.collected ?? 0), 0);
+---
+
+<PublicLayout
+  settings={settings}
+  active="donasi"
+  title="Donasi Alumni"
+  description="Dukung program beasiswa, sarana belajar, dan kegiatan alumni."
+>
+  <div class="public-container" style="padding-top:2rem;padding-bottom:2rem">
+    <div class="grid-2" style="align-items:end">
+      <div>
+        <p class="eyebrow">Donasi</p>
+        <h1 class="page-title" style="margin-top:0.35rem">Dukung almamater</h1>
+        <p class="muted" style="margin:0.5rem 0 0;font-size:0.95rem;max-width:52ch">
+          Setiap kontribusi dicatat dan diverifikasi manual oleh admin. Donatur dapat memilih tampil anonim.
+        </p>
+      </div>
+      <div class="stat-tile" style="max-width:280px;justify-self:end">
+        <div class="eyebrow">Total terverifikasi</div>
+        <div class="stat-value">{formatRupiah(totalCollected)}</div>
+        <p class="tertiary" style="font-size:0.76rem;margin:0.3rem 0 0">
+          Dari {rows.length} kampanye
+        </p>
+      </div>
+    </div>
+
+    <h2 class="section-title" style="font-size:1.15rem;margin:2rem 0 0.85rem">Kampanye aktif</h2>
+    {
+      active.length > 0 ? (
+        <div class="grid-auto">
+          {active.map((campaign) => (
+            <DonationCard campaign={campaign} collected={Number(campaign.collected ?? 0)} />
+          ))}
+        </div>
+      ) : (
+        <EmptyState title="Belum ada kampanye aktif" description="Kampanye baru akan diumumkan melalui berita.">
+          <Heart size={26} stroke-width={1.6} style="color:var(--text-tertiary)" />
+        </EmptyState>
+      )
+    }
+
+    {
+      closed.length > 0 && (
+        <>
+          <h2 class="section-title" style="font-size:1.15rem;margin:2.25rem 0 0.85rem">Kampanye selesai</h2>
+          <div class="stack">
+            {closed.map((campaign) => (
+              <a class="list-row" href={`/donasi/${campaign.slug}`}>
+                <Heart size={18} stroke-width={1.8} style="color:var(--text-tertiary)" />
+                <div style="flex:1;min-width:0">
+                  <strong style="font-size:0.92rem">{campaign.title}</strong>
+                  <div class="tertiary" style="font-size:0.76rem">
+                    {formatRupiah(Number(campaign.collected ?? 0))} terkumpul
+                  </div>
+                </div>
+                <Badge>{campaign.status === 'closed' ? 'Selesai' : 'Draft'}</Badge>
+                {campaign.deadline && (
+                  <span class="tertiary hide-mobile" style="font-size:0.76rem">
+                    {formatDate(campaign.deadline)}
+                  </span>
+                )}
+              </a>
+            ))}
+          </div>
+        </>
+      )
+    }
+  </div>
+</PublicLayout>

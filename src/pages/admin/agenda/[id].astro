@@ -1,0 +1,204 @@
+---
+import { actions } from 'astro:actions';
+import { desc, eq } from 'drizzle-orm';
+import { ArrowLeft, Download, Save, Trash2 } from '@lucide/astro';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import MarkdownEditor from '../../../components/admin/MarkdownEditor';
+import MediaPicker from '../../../components/admin/MediaPicker';
+import Badge from '../../../components/ui/Badge.astro';
+import { eventRegistrations, events, getDb } from '../../../server/db';
+import { getSettings } from '../../../server/settings';
+import { formatDate, formatDateTime, toDateTimeLocal } from '../../../server/format';
+
+const { id } = Astro.params;
+const settings = await getSettings();
+const db = getDb();
+const isNew = id === 'baru';
+const [event] = isNew
+  ? [null]
+  : await db.select().from(events).where(eq(events.id, id ?? '')).limit(1);
+
+if (!isNew && !event) Astro.response.status = 404;
+
+const registrations = event
+  ? await db
+      .select()
+      .from(eventRegistrations)
+      .where(eq(eventRegistrations.eventId, event.id))
+      .orderBy(desc(eventRegistrations.createdAt))
+  : [];
+
+const error = Astro.url.searchParams.get('error');
+const sukses = Astro.url.searchParams.get('sukses');
+const statusLabel: Record<string, string> = {
+  registered: 'Terdaftar',
+  waitlist: 'Daftar tunggu',
+  cancelled: 'Dibatalkan',
+  attended: 'Hadir',
+};
+---
+
+<AdminLayout settings={settings} title={isNew ? 'Tambah agenda' : 'Edit agenda'}>
+  <a class="btn btn-ghost btn-sm" href="/admin/agenda" style="margin-bottom:1rem">
+    <ArrowLeft size={15} stroke-width={2} /> Agenda
+  </a>
+
+  <div class="spread wrap" style="margin-bottom:1.25rem">
+    <div>
+      <h1 class="section-title">{isNew ? 'Tambah agenda' : event?.title}</h1>
+      {event && <p class="muted" style="margin:0.25rem 0 0;font-size:0.84rem">{formatDateTime(event.startsAt)}</p>}
+    </div>
+    {event && <Badge variant={event.status === 'published' ? 'success' : 'default'}>{event.status}</Badge>}
+  </div>
+
+  {error && <div class="alert alert-error" role="alert" style="margin-bottom:1rem">{error}</div>}
+  {sukses && <div class="alert alert-success" role="status" style="margin-bottom:1rem">{sukses}</div>}
+
+  <form method="POST" action={actions.admin.saveEvent} class="stack" style="gap:1.25rem">
+    {event && <input type="hidden" name="id" value={event.id} />}
+
+    <section class="solid-panel" style="padding:1.35rem">
+      <div class="grid-2" style="gap:0.75rem">
+        <div class="field" style="grid-column:1 / -1">
+          <label class="label" for="title">Judul agenda</label>
+          <input class="input" id="title" name="title" required value={event?.title ?? ''} />
+        </div>
+        <div class="field">
+          <label class="label" for="slug">Slug</label>
+          <input class="input" id="slug" name="slug" value={event?.slug ?? ''} placeholder="otomatis" />
+        </div>
+        <div class="field">
+          <label class="label" for="mode">Mode</label>
+          <select class="select" id="mode" name="mode">
+            <option value="offline" selected={event?.mode === 'offline'}>Offline</option>
+            <option value="online" selected={event?.mode === 'online'}>Online</option>
+            <option value="hybrid" selected={event?.mode === 'hybrid'}>Hybrid</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="label" for="startsAt">Mulai</label>
+          <input class="input" id="startsAt" name="startsAt" type="datetime-local" required value={toDateTimeLocal(event?.startsAt)} />
+        </div>
+        <div class="field">
+          <label class="label" for="endsAt">Selesai</label>
+          <input class="input" id="endsAt" name="endsAt" type="datetime-local" value={toDateTimeLocal(event?.endsAt)} />
+        </div>
+        <div class="field">
+          <label class="label" for="registrationClosesAt">Pendaftaran ditutup</label>
+          <input
+            class="input"
+            id="registrationClosesAt"
+            name="registrationClosesAt"
+            type="datetime-local"
+            value={toDateTimeLocal(event?.registrationClosesAt)}
+          />
+        </div>
+        <div class="field">
+          <label class="label" for="capacity">Kuota</label>
+          <input class="input" id="capacity" name="capacity" inputmode="numeric" value={event?.capacity ?? ''} />
+        </div>
+        <div class="field">
+          <label class="label" for="location">Lokasi</label>
+          <input class="input" id="location" name="location" value={event?.location ?? ''} />
+        </div>
+        <div class="field">
+          <label class="label" for="status">Status</label>
+          <select class="select" id="status" name="status">
+            <option value="draft" selected={event?.status === 'draft'}>Draft</option>
+            <option value="published" selected={event?.status === 'published'}>Terbit</option>
+            <option value="cancelled" selected={event?.status === 'cancelled'}>Dibatalkan</option>
+            <option value="done" selected={event?.status === 'done'}>Selesai</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-top:0.9rem">
+        <MediaPicker name="coverKey" label="Gambar sampul" initialKey={event?.coverKey ?? ''} folder="events" client:idle />
+      </div>
+    </section>
+
+    <section class="solid-panel" style="padding:1.35rem">
+      <h2 class="section-title" style="font-size:1rem">Deskripsi</h2>
+      <div style="margin-top:0.9rem">
+        <MarkdownEditor name="descriptionMd" initialValue={event?.descriptionMd ?? ''} client:idle />
+      </div>
+    </section>
+
+    <div class="row wrap">
+      <button class="btn btn-primary" type="submit">
+        <Save size={16} stroke-width={1.9} /> Simpan agenda
+      </button>
+      {event && (
+        <button
+          class="btn btn-danger"
+          type="submit"
+          formaction={actions.admin.deleteEvent}
+          formnovalidate
+          onclick="return confirm('Hapus agenda ini?')"
+        >
+          <Trash2 size={16} stroke-width={1.8} /> Hapus
+        </button>
+      )}
+    </div>
+  </form>
+
+  {
+    event && (
+      <section class="stack" style="gap:0.85rem;margin-top:2rem">
+        <div class="spread wrap">
+          <h2 class="section-title" style="font-size:1.05rem">Peserta ({registrations.length})</h2>
+          <a class="btn btn-secondary btn-sm" href={`/api/admin/export/agenda?eventId=${event.id}`}>
+            <Download size={15} stroke-width={1.9} /> Export CSV
+          </a>
+        </div>
+
+        {registrations.length > 0 ? (
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th scope="col">Nama</th>
+                  <th scope="col">Kontak</th>
+                  <th scope="col">Tamu</th>
+                  <th scope="col">Status</th>
+                  <th scope="col" style="text-align:right">Ubah</th>
+                </tr>
+              </thead>
+              <tbody>
+                {registrations.map((registration) => (
+                  <tr>
+                    <td>
+                      <div style="font-weight:600">{registration.name}</div>
+                      <div class="tertiary" style="font-size:0.75rem">
+                        {formatDate(registration.createdAt)}
+                      </div>
+                    </td>
+                    <td style="font-size:0.8rem">
+                      {registration.email}
+                      {registration.phone && <div class="tertiary">{registration.phone}</div>}
+                    </td>
+                    <td style="font-size:0.8rem">{registration.guests}</td>
+                    <td><Badge>{statusLabel[registration.status]}</Badge></td>
+                    <td style="text-align:right">
+                      <form method="POST" action={actions.admin.updateRegistration} class="row" style="justify-content:flex-end;gap:0.35rem">
+                        <input type="hidden" name="id" value={registration.id} />
+                        <input type="hidden" name="eventId" value={event.id} />
+                        <select class="select" name="status" style="min-height:32px;padding:0.2rem 0.4rem;font-size:0.78rem;width:auto">
+                          {['registered', 'waitlist', 'attended', 'cancelled'].map((value) => (
+                            <option value={value} selected={registration.status === value}>{statusLabel[value]}</option>
+                          ))}
+                        </select>
+                        <button class="btn btn-secondary btn-sm" type="submit">Simpan</button>
+                      </form>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p class="muted" style="font-size:0.86rem">Belum ada peserta terdaftar.</p>
+        )}
+      </section>
+    )
+  }
+</AdminLayout>

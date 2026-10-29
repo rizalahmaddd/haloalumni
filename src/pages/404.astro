@@ -1,0 +1,24 @@
+---
+import { ArrowLeft, Search } from '@lucide/astro';
+import PublicLayout from '../layouts/PublicLayout.astro';
+import { getSettings } from '../server/settings';
+
+const settings = await getSettings();
+Astro.response.status = 404;
+---
+
+<PublicLayout settings={settings} title="Halaman tidak ditemukan" noindex>
+  <div class="public-container" style="padding:4rem 0 5rem;text-align:center">
+    <p class="eyebrow" style="margin:0">404</p>
+    <h1 class="section-title" style="margin:0.5rem 0 0;font-size:clamp(1.8rem,1.4rem + 1.6vw,2.6rem)">
+      Halaman tidak ditemukan
+    </h1>
+    <p class="muted" style="max-width:46ch;margin:0.75rem auto 0">
+      Alamat ini mungkin sudah dipindahkan atau tidak pernah ada. Coba jelajahi direktori atau kembali ke beranda.
+    </p>
+    <div class="row wrap" style="justify-content:center;margin-top:1.5rem">
+      <a class="btn btn-primary" href="/"><ArrowLeft size={16} /> Beranda</a>
+      <a class="btn btn-secondary" href="/direktori"><Search size={16} /> Direktori alumni</a>
+    </div>
+  </div>
+</PublicLayout>
